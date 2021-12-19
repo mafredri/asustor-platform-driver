@@ -1,0 +1,11 @@
+--- drivers/hwmon/it87.c.orig	2021-11-11 15:37:48.000000000 +0200
++++ drivers/hwmon/it87.c	2021-11-11 15:42:10.000000000 +0200
+@@ -3022,7 +3022,7 @@
+ 				 "PWM configuration is too broken to be fixed\n");
+ 		}
+
+-		return 0;
++		return 1;
+ 	} else if (fix_pwm_polarity) {
+ 		dev_info(dev,
+ 			 "PWM configuration looks sane, won't touch\n");
