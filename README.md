@@ -16,6 +16,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 ### Optional
 
 - `it87` (AS6, AS61, AS62)
+  - May require adding `acpi_enforce_resources=lax` to kernel boot arguments for full functionality
   - Temperature monitoring (`lm-sensors`)
   - Fan speed regulation via `pwm1`
     - See [`example/fancontrol`](./example/fancontrol) for an example `/etc/fancontrol` config for a AS62 system
