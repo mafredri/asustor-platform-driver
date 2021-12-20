@@ -124,7 +124,7 @@ static struct gpio_keys_button asustor_gpio_keys_table[] = {
 		.code	    = KEY_POWER,
 		.type	    = EV_KEY,
 		.active_low = 1,
-		.gpio	    = -1, // Invalid, set int init.
+		.gpio	    = -1, // Invalid, set in init.
 	},
 };
 
