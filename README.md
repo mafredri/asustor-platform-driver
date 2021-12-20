@@ -2,7 +2,7 @@
 
 Linux kernel platform driver for ASUSTOR NAS hardware (leds, buttons).
 
-On many systems, ASUSTOR use a mix of IT87 and CPU GPIOs to control leds and buttons. Adding support for more systems should be fairly trivial, but may require some reverse engineering to figure out which GPIOs are responsible for what.
+On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and buttons. Adding support for more systems should be fairly trivial, but may require some reverse engineering to figure out which GPIOs are responsible for what.
 
 **WARNING:** Changing GPIO input/outputs (as done by this module) without knowledge of their effects can be dangerous and lead to instability, corrupted data or a broken system. **Use at your own risk.**
 
@@ -29,7 +29,7 @@ On many systems, ASUSTOR use a mix of IT87 and CPU GPIOs to control leds and but
 
 ## Features
 
-- LEDs
+- LEDs (front panel, disk)
   - See [asustor.c](asustor.c).
 - Buttons
   - USB Copy Button
