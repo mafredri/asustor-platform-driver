@@ -2,9 +2,10 @@ TARGET         ?= $(shell uname -r)
 KERNEL_MODULES := /lib/modules/$(TARGET)
 KERNEL_BUILD   := $(KERNEL_MODULES)/build
 SYSTEM_MAP     := /boot/System.map-$(TARGET)
-MOD_SUBDIR      = drivers/platform/x86
-MOD_DEST_DIR    = $(KERNEL_MODULES)/kernel/$(MOD_SUBDIR)
-DRIVER         := asustor
+DRIVER         := asustor asustor_it87
+
+asustor_DEST_DIR      = $(KERNEL_MODULES)/kernel/drivers/platform/x86
+asustor_it87_DEST_DIR = $(KERNEL_MODULES)/kernel/drivers/hwmon
 
 obj-m  := $(patsubst %,%.o,$(DRIVER))
 obj-ko := $(patsubst %,%.ko,$(DRIVER))
@@ -17,7 +18,7 @@ modules:
 install: modules_modules
 
 modules_modules:
-	/usr/bin/install -m 644 -D $(DRIVER).ko $(MOD_DEST_DIR)/$(DRIVER).ko
+	$(foreach mod,$(DRIVER),/usr/bin/install -m 644 -D $(mod).ko $($(mod)_DEST_DIR)/$(mod).ko;)
 	depmod -a -F $(SYSTEM_MAP) $(TARGET)
 
 clean:

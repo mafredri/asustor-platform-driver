@@ -175,9 +175,6 @@ static inline void superio_exit(int ioreg)
 /* Update battery voltage after every reading if true */
 static bool update_vbat;
 
-/* Not all BIOSes properly configure the PWM registers */
-static bool fix_pwm_polarity;
-
 /* Many IT87 constants specified below */
 
 /* Length of ISA address segment */
@@ -2978,55 +2975,12 @@ static void it87_init_device(struct platform_device *pdev)
 /* Return 1 if and only if the PWM interface is safe to use */
 static int it87_check_pwm(struct device *dev)
 {
-	struct it87_data *data = dev_get_drvdata(dev);
 	/*
-	 * Some BIOSes fail to correctly configure the IT87 fans. All fans off
-	 * and polarity set to active low is sign that this is the case so we
-	 * disable pwm control to protect the user.
+	 * All ASUSTOR hardware initializes the IT87 fan in active low polarity
+	 * allowing the fan to be used as-is.
+	 *
+	 * NOTE(mafredri): Should we do additional checks to verify?
 	 */
-	int tmp = it87_read_value(data, IT87_REG_FAN_CTL);
-
-	if ((tmp & 0x87) == 0) {
-		if (fix_pwm_polarity) {
-			/*
-			 * The user asks us to attempt a chip reconfiguration.
-			 * This means switching to active high polarity and
-			 * inverting all fan speed values.
-			 */
-			int i;
-			u8 pwm[3];
-
-			for (i = 0; i < ARRAY_SIZE(pwm); i++)
-				pwm[i] = it87_read_value(data,
-							 IT87_REG_PWM[i]);
-
-			/*
-			 * If any fan is in automatic pwm mode, the polarity
-			 * might be correct, as suspicious as it seems, so we
-			 * better don't change anything (but still disable the
-			 * PWM interface).
-			 */
-			if (!((pwm[0] | pwm[1] | pwm[2]) & 0x80)) {
-				dev_info(dev,
-					 "Reconfiguring PWM to active high polarity\n");
-				it87_write_value(data, IT87_REG_FAN_CTL,
-						 tmp | 0x87);
-				for (i = 0; i < 3; i++)
-					it87_write_value(data,
-							 IT87_REG_PWM[i],
-							 0x7f & ~pwm[i]);
-				return 1;
-			}
-
-			dev_info(dev,
-				 "PWM configuration is too broken to be fixed\n");
-		}
-
-		return 0;
-	} else if (fix_pwm_polarity) {
-		dev_info(dev,
-			 "PWM configuration looks sane, won't touch\n");
-	}
 
 	return 1;
 }
@@ -3358,11 +3312,6 @@ static void __exit sm_it87_exit(void)
 
 MODULE_AUTHOR("Chris Gauthron, Jean Delvare <jdelvare@suse.de>");
 MODULE_DESCRIPTION("IT8705F/IT871xF/IT872xF hardware monitoring driver");
-module_param(update_vbat, bool, 0);
-MODULE_PARM_DESC(update_vbat, "Update vbat if set else return powerup value");
-module_param(fix_pwm_polarity, bool, 0);
-MODULE_PARM_DESC(fix_pwm_polarity,
-		 "Force PWM polarity to active high (DANGEROUS)");
 MODULE_LICENSE("GPL");
 
 module_init(sm_it87_init);

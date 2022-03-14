@@ -16,6 +16,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 ### Optional
 
 - `it87` (AS6, AS61, AS62)
+  - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks.
   - May require adding `acpi_enforce_resources=lax` to kernel boot arguments for full functionality
   - Temperature monitoring (`lm-sensors`)
   - Fan speed regulation via `pwm1`
@@ -49,7 +50,11 @@ sudo make install
 
 ### `it87` and PWM polarity
 
-You may want to use [`patches/001-ignore-pwm-polarity-it87.patch`](patches/001-ignore-pwm-polarity-it87.patch) for the `it87` kernel module if it complains about PWM polarity. In this case, it's possible to use `fix_pwm_polarity=1`, however, it may reverse the polarity which is unwanted (i.e. high is low, low is high). It works fine when left as configured by the firmware.
+This project includes a patched version of the `it87` module (`asustor-it87`) that is part of mainline kernel. It skips PWM sanity checks for the fan because ASUSTOR firmware correctly initializes fans in active low polarity and can be used straight with `fancontrol` or similar tools.
+
+Note that `it87` conflicts with `asustor-it87`, you may wish to add `it87` to the module blocklist or explicitly load `asustor-it87` instead.
+
+~~You may want to use [`patches/001-ignore-pwm-polarity-it87.patch`](patches/001-ignore-pwm-polarity-it87.patch) for the `it87` kernel module if it complains about PWM polarity. In this case, it's possible to use `fix_pwm_polarity=1`, however, it may reverse the polarity which is unwanted (i.e. high is low, low is high). It works fine when left as configured by the firmware.~~
 
 ### Misc
 
