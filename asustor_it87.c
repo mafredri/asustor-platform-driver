@@ -72,7 +72,7 @@
 #include <linux/acpi.h>
 #include <linux/io.h>
 
-#define DRVNAME "it87"
+#define DRVNAME "asustor_it87"
 
 enum chips { it87, it8712, it8716, it8718, it8720, it8721, it8728, it8732,
 	     it8736, it8738, it8606, it8607, it8613, it8625,
