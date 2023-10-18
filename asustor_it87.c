@@ -51,6 +51,16 @@
  *
  *  Copyright (C) 2001 Chris Gauthron
  *  Copyright (C) 2005-2010 Jean Delvare <jdelvare@suse.de>
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -72,6 +82,10 @@
 #include <linux/acpi.h>
 #include <linux/io.h>
 
+#ifndef IT87_DRIVER_VERSION
+#define IT87_DRIVER_VERSION "<not provided>"
+#endif
+
 #define DRVNAME "asustor_it87"
 
 enum chips { it87, it8712, it8716, it8718, it8720, it8721, it8728, it8732,
@@ -91,6 +105,10 @@ MODULE_PARM_DESC(ignore_resource_conflict, "Ignore ACPI resource conflict");
 static bool mmio;
 module_param(mmio, bool, 0000);
 MODULE_PARM_DESC(mmio, "Use MMIO if available");
+
+// TODO: what about the following functions?
+//bool to_load_it87(void);
+//bool asustor_model_check(const char *model_name);
 
 static struct platform_device *it87_pdev[2];
 
@@ -117,6 +135,7 @@ static inline void __superio_enter(int ioreg)
 static inline int superio_inb(int ioreg, int reg)
 {
 	outb(reg, ioreg);
+    // TODO: asustor assigns this to int val and returns that, does that make sense?
 	return inb(ioreg + 1);
 }
 
@@ -211,6 +230,8 @@ static inline void superio_exit(int ioreg, bool doexit)
 #define IT87_SIO_PINX1_REG	0x2a	/* Pin selection */
 #define IT87_SIO_PINX2_REG	0x2c	/* Pin selection */
 #define IT87_SIO_PINX4_REG	0x2d    /* Pin selection */
+
+/* Logical device 7 (GPIO) registers (IT8712F and later) */
 #define IT87_SIO_SPI_REG	0xef	/* SPI function pin select */
 #define IT87_SIO_VID_REG	0xfc	/* VID value */
 #define IT87_SIO_BEEP_PIN_REG	0xf6	/* Beep pin mapping */
@@ -803,6 +824,13 @@ static const struct it87_devices it87_devices[] = {
 #define has_mmio(data)		((data)->features & FEAT_MMIO)
 #define has_four_temp(data)	((data)->features & FEAT_FOUR_TEMP)
 
+#define GPLED_TO_LOCATION(GP_LED) \
+	({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
+#define LOCATION_TO_GPLED(LOCATION) \
+	({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
+
+static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
+
 struct it87_sio_data {
 	enum chips type;
 	u8 sioaddr;
@@ -827,7 +855,7 @@ struct it87_sio_data {
  * The structure is dynamically allocated.
  */
 struct it87_data {
-	const struct attribute_group *groups[7];
+	const struct attribute_group *groups[7 + 1];
 	enum chips type;
 	u32 features;
 	u8 peci_mask;
@@ -2641,6 +2669,88 @@ static SENSOR_DEVICE_ATTR(in8_label, S_IRUGO, show_label, NULL, 2);
 /* AVCC3 */
 static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
+/* GP LED BLINK CONTROL */
+#if defined(CONFIG_GPIO_IT87)
+int it87_gpio_led_blink_get(u8 index);
+int it87_gpio_led_blink_set(u8 index, u32 gpio);
+int it87_gpio_led_blink_freq_get(u8 index);
+int it87_gpio_led_blink_freq_set(u8 index, u8 mode);
+#else
+#define it87_gpio_led_blink_get(u8 index)
+#define it87_gpio_led_blink_set(u8 index, u32 gpio)
+#define it87_gpio_led_blink_freq_get(u8 index)
+#define it87_gpio_led_blink_freq_set(u8 index, u8 mode)
+#endif
+
+static ssize_t show_gpled_blink(struct device *dev, struct device_attribute *attr,
+                                char *buf)
+{
+    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+
+    return sprintf(buf, "%d\n", it87_gpio_led_blink_get(sattr->index));
+}
+
+static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr,
+                               const char *buf, size_t count)
+{
+    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+    long val;
+
+    if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 6)
+        return -EINVAL;
+
+    it87_gpio_led_blink_set(sattr->index, val);
+
+    return count;
+}
+static SENSOR_DEVICE_ATTR(gpled1_blink, 0644, show_gpled_blink, set_gpled_blink, 0);
+static SENSOR_DEVICE_ATTR(gpled2_blink, 0644, show_gpled_blink, set_gpled_blink, 1);
+
+/*
+	(MODE_INDEX)	(F9h [7:6])	(F9h [3:1])	(Blink frequency & Duty)	(ON/OFF Time)
+	0				00			000:		4Hz,	50% Duty			0.125s	OFF	0.125s	ON
+	1				00			001:		1Hz,	50% Duty			0.5s	OFF	0.5s	ON
+	2				00			010:		0.25Hz,	50% Duty			2s	OFF	2s	ON
+	3				00			011:		2Hz,	50% Duty			0.25s	OFF	0.25s	ON
+	4				00			100:		0.25Hz,	25% Duty			1s	OFF	3s	ON
+	5				00			101:		0.25Hz,	75% Duty			3s	OFF	1s	ON
+	6				00			110:		0.125Hz,25% Duty			2s	OFF	6s	ON
+	7				00			111:		0.125Hz	75% Duty			6s	OFF	2s	ON
+	8				01			XXX			0.4Hz,	20% Duty			0.5s	OFF	2s	ON
+	9				10			XXX			0.5 Hz,	50% Duty			1S	OFF	1S	ON
+	10				11			XXX			0.125Hz, 50% Duty			4S	OFF	4S	ON
+*/
+const char * blink_freq_desc[] = {
+    "0.125s	OFF	0.125s ON", "0.5s OFF 0.5s ON", "2s	OFF	2s ON", "0.25s OFF 0.25s ON", "1s OFF 3s ON", "3s OFF 1s ON",
+    "2s	OFF	6s ON", "6s	OFF	2s ON", "0.5s OFF 2s ON", "1S OFF 1S ON", "4S OFF 4S ON"
+};
+
+static ssize_t show_gpled_blink_freq(struct device * dev, struct device_attribute *attr, char *buf)
+{
+    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+
+    int mode = it87_gpio_led_blink_freq_get(sattr->index);
+
+    return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+}
+
+static ssize_t set_gpled_blink_freq(struct device *dev, struct device_attribute *attr,
+                                    const char *buf, size_t count)
+{
+    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+    long val;
+
+    if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 11)
+        return -EINVAL;
+
+    it87_gpio_led_blink_freq_set(sattr->index, val);
+
+    return count;
+}
+
+static SENSOR_DEVICE_ATTR(gpled1_blink_freq, 0644, show_gpled_blink_freq, set_gpled_blink_freq, 0);
+static SENSOR_DEVICE_ATTR(gpled2_blink_freq, 0644, show_gpled_blink_freq, set_gpled_blink_freq, 1);
+
 static umode_t it87_in_is_visible(struct kobject *kobj,
 				  struct attribute *attr, int index)
 {
@@ -2762,7 +2872,7 @@ static struct attribute *it87_attributes_temp[] = {
 	&sensor_dev_attr_temp1_input.dev_attr.attr,
 	&sensor_dev_attr_temp1_max.dev_attr.attr,
 	&sensor_dev_attr_temp1_min.dev_attr.attr,
-	&sensor_dev_attr_temp1_type.dev_attr.attr,
+	&sensor_dev_attr_temp1_type.dev_attr.attr,	/* 3 */
 	&sensor_dev_attr_temp1_alarm.dev_attr.attr,
 	&sensor_dev_attr_temp1_offset.dev_attr.attr,	/* 5 */
 	&sensor_dev_attr_temp1_beep.dev_attr.attr,	/* 6 */
@@ -3072,6 +3182,30 @@ static struct attribute *it87_attributes_auto_pwm[] = {
 static const struct attribute_group it87_group_auto_pwm = {
 	.attrs = it87_attributes_auto_pwm,
 	.is_visible = it87_auto_pwm_is_visible,
+};
+
+static struct attribute *it87_attributes_gp_led_blink[] = {
+    &sensor_dev_attr_gpled1_blink.dev_attr.attr,
+    &sensor_dev_attr_gpled2_blink.dev_attr.attr,
+    &sensor_dev_attr_gpled1_blink_freq.dev_attr.attr,
+    &sensor_dev_attr_gpled2_blink_freq.dev_attr.attr,
+
+    NULL
+};
+
+static umode_t it87_gpled_blink_is_visible(struct kobject *kobj, struct attribute *attr, int index)
+{
+    // struct device *dev = container_of(kobj, struct device, kobj);
+    // struct it87_data *data = dev_get_drvdata(dev);
+    // int i = index / 7; /* temperature index */
+    // int a = index % 7; /* attribute index */
+
+    return attr->mode;
+}
+
+static const struct attribute_group it87_group_gpled_blink = {
+    .attrs = it87_attributes_gp_led_blink,
+    .is_visible = it87_gpled_blink_is_visible,
 };
 
 /* SuperIO detection - will change isa_address if a chip is found */
@@ -3985,6 +4119,8 @@ static int it87_check_pwm(struct device *dev)
 	 * NOTE(mafredri): Should we do additional checks to verify?
 	 */
 
+    // TODO: is the fix_pwm_polarity hack relevant at all? would be here..
+
 	return 1;
 }
 
@@ -4158,7 +4294,7 @@ static int it87_probe(struct platform_device *pdev)
 	data->groups[2] = &it87_group_temp;
 	data->groups[3] = &it87_group_fan;
 
-	if (enable_pwm_interface) {
+	if (enable_pwm_interface) { // FIXME: asustor uses if(true)
 		data->has_pwm = BIT(ARRAY_SIZE(IT87_REG_PWM)) - 1;
 		data->has_pwm &= ~sio_data->skip_pwm;
 
@@ -4344,6 +4480,8 @@ static int __init sm_it87_init(void)
 	bool found = false;
 	int i, err;
 
+    pr_info("it87 driver version %s\n", IT87_DRIVER_VERSION);
+
 	if (dmi)
 		dmi_data = dmi->driver_data;
 
@@ -4395,7 +4533,13 @@ static void __exit sm_it87_exit(void)
 
 MODULE_AUTHOR("Chris Gauthron, Jean Delvare <jdelvare@suse.de>");
 MODULE_DESCRIPTION("IT8705F/IT871xF/IT872xF hardware monitoring driver");
+//module_param(update_vbat, bool, 0000);
+//MODULE_PARM_DESC(update_vbat, "Update vbat if set else return powerup value");
+//module_param(fix_pwm_polarity, bool, 0000);
+//MODULE_PARM_DESC(fix_pwm_polarity,
+//                 "Force PWM polarity to active high (DANGEROUS)");
 MODULE_LICENSE("GPL");
+MODULE_VERSION(IT87_DRIVER_VERSION);
 
 module_init(sm_it87_init);
 module_exit(sm_it87_exit);
