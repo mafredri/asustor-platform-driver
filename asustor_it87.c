@@ -2670,7 +2670,7 @@ static SENSOR_DEVICE_ATTR(in8_label, S_IRUGO, show_label, NULL, 2);
 static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
 /* GP LED BLINK CONTROL */
-#if defined(CONFIG_GPIO_IT87)
+#if 1 //defined(CONFIG_GPIO_IT87)
 int it87_gpio_led_blink_get(u8 index);
 int it87_gpio_led_blink_set(u8 index, u32 gpio);
 int it87_gpio_led_blink_freq_get(u8 index);
@@ -2703,8 +2703,12 @@ static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr
 
     return count;
 }
-static SENSOR_DEVICE_ATTR(gpled1_blink, 0644, show_gpled_blink, set_gpled_blink, 0);
-static SENSOR_DEVICE_ATTR(gpled2_blink, 0644, show_gpled_blink, set_gpled_blink, 1);
+static SENSOR_DEVICE_ATTR(gpled1_blink, S_IRUGO | S_IWUSR, show_gpled_blink, set_gpled_blink, 0);
+static SENSOR_DEVICE_ATTR(gpled2_blink, S_IRUGO | S_IWUSR, show_gpled_blink, set_gpled_blink, 1);
+
+//#define GPLED_TO_LOCATION(GP_LED) ({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
+//#define LOCATION_TO_GPLED(LOCATION) ({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
+
 
 /*
 	(MODE_INDEX)	(F9h [7:6])	(F9h [3:1])	(Blink frequency & Duty)	(ON/OFF Time)
