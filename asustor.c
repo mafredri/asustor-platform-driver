@@ -17,11 +17,12 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 
-#define GPIO_IT87 "gpio_it87"
+//#define GPIO_IT87 "gpio_it87"
+#define GPIO_IT87 "asustor_gpio" // use custom patched version for IT8625 support
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
 
-#define AS6100_GPIO_IT87_BASE 161
+#define AS6100_GPIO_IT87_BASE 161 // same for AS6700
 #define AS600_GPIO_IT87_BASE 448
 
 // ASUSTOR Leds.
@@ -107,6 +108,84 @@ static struct gpiod_lookup_table asustor_600_gpio_leds_lookup = {
 		{}
 	},
 };
+
+static struct gpio_led as6700_leds[] = {
+	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON },
+	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF },
+	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON },
+	{ .name = "red:status", .default_state = LEDS_GPIO_DEFSTATE_ON },
+	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },
+	{ .name = "lcd_power", .default_state = LEDS_GPIO_DEFSTATE_ON },
+	{
+		.name		 = "sata1:red:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "disk-activity",
+	},
+	{
+		.name		 = "sata2:red:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "disk-activity",
+	},
+	{
+		.name		 = "sata3:red:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "disk-activity",
+	},
+	{
+		.name		 = "sata4:red:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "disk-activity",
+	},
+	{
+		.name		 = "sata1:green:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "none",
+	},
+	{
+		.name		 = "sata2:green:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "none",
+	},
+	{
+		.name		 = "sata3:green:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "none",
+	},
+	{
+		.name		 = "sata4:green:disk",
+		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.default_trigger = "none",
+	},
+};
+
+static const struct gpio_led_platform_data as6700_leds_pdata = {
+	.leds	  = as6700_leds,
+	.num_leds = ARRAY_SIZE(as6700_leds),
+};
+
+static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),	//blue power led
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL, 1, GPIO_ACTIVE_LOW),	//red power led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),	//green status led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_HIGH),	//red status led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 4, GPIO_ACTIVE_LOW),	//green usb led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 5, GPIO_ACTIVE_HIGH),	//LCD power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 6, GPIO_ACTIVE_LOW),	//sata1 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 7, GPIO_ACTIVE_LOW),	//sata2 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 8, GPIO_ACTIVE_LOW),	//sata3 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 9, GPIO_ACTIVE_LOW),	//sata4 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 10, GPIO_ACTIVE_LOW),	//sata1 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_LOW),	//sata2 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 12, GPIO_ACTIVE_LOW),	//sata3 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_LOW),	//sata4 green led
+
+		{}
+	},
+};
+
+
 // clang-format on
 
 // ASUSTOR Buttons.
@@ -136,7 +215,7 @@ static struct gpio_keys_platform_data asustor_keys_pdata = {
 };
 
 // clang-format off
-static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = {
+static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = { // XXX: same for 6700
 	.dev_id = "gpio-keys-polled",
 	.table = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 20, NULL, 0, GPIO_ACTIVE_LOW),
@@ -162,6 +241,12 @@ struct asustor_driver_data {
 	struct gpiod_lookup_table *keys;
 };
 
+static struct asustor_driver_data asustor_6700_driver_data = {
+	.gpio_base = AS6100_GPIO_IT87_BASE,
+	.leds	   = &asustor_6700_gpio_leds_lookup,
+	.keys	   = &asustor_6100_gpio_keys_lookup,
+};
+
 static struct asustor_driver_data asustor_6100_driver_data = {
 	.gpio_base = AS6100_GPIO_IT87_BASE,
 	.leds	   = &asustor_6100_gpio_leds_lookup,
@@ -175,6 +260,23 @@ static struct asustor_driver_data asustor_600_driver_data = {
 };
 
 static const struct dmi_system_id asustor_systems[] = {
+	{
+		// Note: This not only matches (and works with) AS670xT (Lockerstore Gen2),
+		//       but also AS540xT (Nimbustor Gen2)
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+		},
+		.driver_data = &asustor_6700_driver_data,
+	},
+	// the same also seemed to work with AS6602T, though I can't test that anymore
+	{
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
+		},
+		.driver_data = &asustor_6700_driver_data,
+	},
 	{
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
@@ -286,6 +388,6 @@ MODULE_AUTHOR("Mathias Fredriksson <mafredri@gmail.com>");
 MODULE_DESCRIPTION("Platform driver for ASUSTOR NAS hardware");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:asustor");
-MODULE_SOFTDEP("pre: asustor-it87 gpio-it87 gpio-ich"
+MODULE_SOFTDEP("pre: asustor-it87 asustor-gpio-it87 gpio-ich"
 	       " platform:leds-gpio"
 	       " platform:gpio-keys-polled");
