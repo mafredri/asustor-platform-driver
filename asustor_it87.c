@@ -2670,16 +2670,16 @@ static SENSOR_DEVICE_ATTR(in8_label, S_IRUGO, show_label, NULL, 2);
 static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
 /* GP LED BLINK CONTROL */
-#if 1 //defined(CONFIG_GPIO_IT87)
+#if 0 //defined(CONFIG_GPIO_IT87)
 int it87_gpio_led_blink_get(u8 index);
 int it87_gpio_led_blink_set(u8 index, u32 gpio);
 int it87_gpio_led_blink_freq_get(u8 index);
 int it87_gpio_led_blink_freq_set(u8 index, u8 mode);
 #else
-#define it87_gpio_led_blink_get(u8 index)
-#define it87_gpio_led_blink_set(u8 index, u32 gpio)
-#define it87_gpio_led_blink_freq_get(u8 index)
-#define it87_gpio_led_blink_freq_set(u8 index, u8 mode)
+#define it87_gpio_led_blink_get(index) 1
+#define it87_gpio_led_blink_set(index, gpio)
+#define it87_gpio_led_blink_freq_get(index) 1
+#define it87_gpio_led_blink_freq_set(index, mode)
 #endif
 
 static ssize_t show_gpled_blink(struct device *dev, struct device_attribute *attr,
@@ -4297,14 +4297,16 @@ static int it87_probe(struct platform_device *pdev)
 	data->groups[1] = &it87_group_in;
 	data->groups[2] = &it87_group_temp;
 	data->groups[3] = &it87_group_fan;
+	
+	data->groups[4] = &it87_group_gpled_blink;
 
 	if (enable_pwm_interface) { // FIXME: asustor uses if(true)
 		data->has_pwm = BIT(ARRAY_SIZE(IT87_REG_PWM)) - 1;
 		data->has_pwm &= ~sio_data->skip_pwm;
 
-		data->groups[4] = &it87_group_pwm;
+		data->groups[5] = &it87_group_pwm;
 		if (has_old_autopwm(data) || has_newer_autopwm(data))
-			data->groups[5] = &it87_group_auto_pwm;
+			data->groups[6] = &it87_group_auto_pwm;
 	}
 
 	hwmon_dev = devm_hwmon_device_register_with_groups(dev,
@@ -4544,6 +4546,8 @@ MODULE_DESCRIPTION("IT8705F/IT871xF/IT872xF hardware monitoring driver");
 //                 "Force PWM polarity to active high (DANGEROUS)");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(IT87_DRIVER_VERSION);
+
+// TODO: MODULE_SOFTDEP() or similar, for hwmon_vid
 
 module_init(sm_it87_init);
 module_exit(sm_it87_exit);
