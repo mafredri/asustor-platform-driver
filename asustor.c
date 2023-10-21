@@ -18,7 +18,7 @@
 #include <linux/platform_device.h>
 
 //#define GPIO_IT87 "gpio_it87"
-#define GPIO_IT87 "asustor_gpio" // use custom patched version for IT8625 support
+#define GPIO_IT87 "asustor_gpio_it87" // use custom patched version for IT8625 support
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
 
@@ -180,7 +180,6 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_LOW),	//sata2 green led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 12, GPIO_ACTIVE_LOW),	//sata3 green led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_LOW),	//sata4 green led
-
 		{}
 	},
 };
@@ -348,8 +347,13 @@ static int __init asustor_init(void)
 	}
 
 	// TODO(mafredri): Handle number of disk slots -> enabled LEDs.
-	asustor_leds_pdev = asustor_create_pdev(
-		"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
+	if(driver_data == &asustor_6700_driver_data) {
+		asustor_leds_pdev = asustor_create_pdev(
+			"leds-gpio", &as6700_leds_pdata, sizeof(as6700_leds_pdata));
+	} else {
+		asustor_leds_pdev = asustor_create_pdev(
+			"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
+	}
 	if (IS_ERR(asustor_leds_pdev)) {
 		ret = PTR_ERR(asustor_leds_pdev);
 		goto err;
