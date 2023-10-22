@@ -15,8 +15,12 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ### Optional
 
-- `it87` (AS6, AS61, AS62)
-  - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks.
+- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX)
+  - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
+    and supports more variants of IT86XX and the IT867XX chips than the kernels `it87` driver.
+    Furthermore it supports controlling blinking of up to two LEDs.
+  - Also includes a patched version of `gpio-it87` called `asustor-gpio-it87`. The only change is supporting
+    the IT8625E that is used in several newer asustor devices.
   - May require adding `acpi_enforce_resources=lax` to kernel boot arguments for full functionality
   - Temperature monitoring (`lm-sensors`)
   - Fan speed regulation via `pwm1`
@@ -47,6 +51,19 @@ sudo make install
 ```
 
 ## Tips
+
+### Control blinking LEDs
+
+Stop the blinking of the annoying green status LED:
+```
+echo 0 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink
+```
+
+You can re-enable it with `echo 47 | sudo tee ...` because the status led is it87_gp**47**.
+Similarly, you can make other GPIO LEDs blink.
+
+_**TODO:** describe in more detail, including frequency setting_  
+_**TODO:** figure out how to make the status LED light up permanently_
 
 ### `it87` and PWM polarity
 
