@@ -2669,6 +2669,22 @@ static SENSOR_DEVICE_ATTR(in8_label, S_IRUGO, show_label, NULL, 2);
 /* AVCC3 */
 static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
+
+/* #### IT8625 GP LED blinking control #### */
+
+//#define GPLED_TO_LOCATION(GP_LED) ({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
+//#define LOCATION_TO_GPLED(LOCATION) ({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
+
+// static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
+
+// Documentation:
+// IT8625E programming example, in Chinese: https://icode.best/i/96302341329066
+// Translation: https://icode-best.translate.goog/i/96302341329066?_x_tr_sl=zh-CN&_x_tr_tl=en
+// not quite the same chip, but a bit helpful anyway: http://www.datasheet39.com/PDF/739483/IT8720F-datasheet.html
+// also, the table below and the commented out macros above are from asustors GPL kernel code
+// (that seems to be incomplete, which wouldn't really be GPL-compliant..)
+// from https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
+
 /* GP LED BLINK CONTROL */
 #if 0 //defined(CONFIG_GPIO_IT87)
 int it87_gpio_led_blink_get(u8 index);
@@ -2685,30 +2701,26 @@ int it87_gpio_led_blink_freq_set(u8 index, u8 mode);
 static ssize_t show_gpled_blink(struct device *dev, struct device_attribute *attr,
                                 char *buf)
 {
-    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
 
-    return sprintf(buf, "%d\n", it87_gpio_led_blink_get(sattr->index));
+	return sprintf(buf, "%d\n", it87_gpio_led_blink_get(sattr->index));
 }
 
 static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr,
                                const char *buf, size_t count)
 {
-    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
-    long val;
+	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	long val;
 
-    if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 6)
-        return -EINVAL;
+	// WTF - val is supposed to be < 70, and its second digit < 8 ?!
+	// might be gpio index or sth
+	if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 6)
+		return -EINVAL;
 
-    it87_gpio_led_blink_set(sattr->index, val);
+	it87_gpio_led_blink_set(sattr->index, val);
 
-    return count;
+	return count;
 }
-static SENSOR_DEVICE_ATTR(gpled1_blink, S_IRUGO | S_IWUSR, show_gpled_blink, set_gpled_blink, 0);
-static SENSOR_DEVICE_ATTR(gpled2_blink, S_IRUGO | S_IWUSR, show_gpled_blink, set_gpled_blink, 1);
-
-//#define GPLED_TO_LOCATION(GP_LED) ({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
-//#define LOCATION_TO_GPLED(LOCATION) ({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
-
 
 /*
 	(MODE_INDEX)	(F9h [7:6])	(F9h [3:1])	(Blink frequency & Duty)	(ON/OFF Time)
@@ -2724,6 +2736,35 @@ static SENSOR_DEVICE_ATTR(gpled2_blink, S_IRUGO | S_IWUSR, show_gpled_blink, set
 	9				10			XXX			0.5 Hz,	50% Duty			1S	OFF	1S	ON
 	10				11			XXX			0.125Hz, 50% Duty			4S	OFF	4S	ON
 */
+
+// sets (only!) bits 1-3 and 6-7 for the blinking control registers frequency selection
+// depending on the mode index (0-10, see table above or blink_freq_desc[])
+// returns 255 on error (invalid mode)
+static u8 blink_mode_to_regvals(u8 mode)
+{
+	if(mode < 8) {
+		return mode << 1;
+	} else if(mode <= 10) {
+		mode -= 7; // 8 => 0b01, 9 => 0b10, 10 => 0b11
+		return mode << 6;
+	}
+	return 255;
+}
+
+// returns blink freq mode index based on bits 1-3 and 6-7 of regvals from blinking control register
+static u8 regvals_to_blink_mode(u8 regvals)
+{
+	u8 ret;
+	u8 bits67 = regvals & (3u << 6);
+	if(bits67 == 0) { // bits 6 and 7 not set => return bits 1 to 3
+		ret = (regvals >> 1) & 7;
+	} else {
+		ret = bits67 >> 6;
+		ret += 7; // 0b01 => 8 etc
+	}
+	return ret;
+}
+
 const char * blink_freq_desc[] = {
     "0.125s	OFF	0.125s ON", "0.5s OFF 0.5s ON", "2s	OFF	2s ON", "0.25s OFF 0.25s ON", "1s OFF 3s ON", "3s OFF 1s ON",
     "2s	OFF	6s ON", "6s	OFF	2s ON", "0.5s OFF 2s ON", "1S OFF 1S ON", "4S OFF 4S ON"
@@ -2731,29 +2772,46 @@ const char * blink_freq_desc[] = {
 
 static ssize_t show_gpled_blink_freq(struct device * dev, struct device_attribute *attr, char *buf)
 {
-    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	
+	//u8 reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING
+	return sprintf(buf, "idx %d", sattr->index);
+#if 0
+	u8 regval = 0; // TODO: get from blinking control register (0xF9 or 0xFB)
+	int mode = regvals_to_blink_mode(regval);
 
-    int mode = it87_gpio_led_blink_freq_get(sattr->index);
-
-    return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+	return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+#endif
 }
 
 static ssize_t set_gpled_blink_freq(struct device *dev, struct device_attribute *attr,
                                     const char *buf, size_t count)
 {
-    struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
-    long val;
+	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	long val;
 
-    if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 11)
-        return -EINVAL;
+	if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 11)
+		return -EINVAL;
 
-    it87_gpio_led_blink_freq_set(sattr->index, val);
+	//it87_gpio_led_blink_freq_set(sattr->index, val);
+	//u8 regval = blink_mode_to_regvals(val);
+	// TODO: get current value, clear bits 1:3 and 6:7, OR with blink_mode_to_regvals(val)
 
-    return count;
+	return count;
 }
 
-static SENSOR_DEVICE_ATTR(gpled1_blink_freq, 0644, show_gpled_blink_freq, set_gpled_blink_freq, 0);
-static SENSOR_DEVICE_ATTR(gpled2_blink_freq, 0644, show_gpled_blink_freq, set_gpled_blink_freq, 1);
+static SENSOR_DEVICE_ATTR(gpled1_blink, S_IRUGO | S_IWUSR,
+                          show_gpled_blink, set_gpled_blink, 0);
+static SENSOR_DEVICE_ATTR(gpled2_blink, S_IRUGO | S_IWUSR,
+                          show_gpled_blink, set_gpled_blink, 1);
+
+static SENSOR_DEVICE_ATTR(gpled1_blink_freq, S_IRUGO | S_IWUSR,
+                           show_gpled_blink_freq, set_gpled_blink_freq, 0);
+static SENSOR_DEVICE_ATTR(gpled2_blink_freq, S_IRUGO | S_IWUSR,
+                           show_gpled_blink_freq, set_gpled_blink_freq, 1);
+
+/* #### end of IT8625 LED blinking control #### */
+
 
 static umode_t it87_in_is_visible(struct kobject *kobj,
 				  struct attribute *attr, int index)
@@ -4547,7 +4605,8 @@ MODULE_DESCRIPTION("IT8705F/IT871xF/IT872xF hardware monitoring driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(IT87_DRIVER_VERSION);
 
-// TODO: MODULE_SOFTDEP() or similar, for hwmon_vid
+//MODULE_SOFTDEP("pre: asustor-gpio-it87");
+// TODO: MODULE_SOFTDEP() or similar, for hwmon_vid and asustor_gpio_it87
 
 module_init(sm_it87_init);
 module_exit(sm_it87_exit);
