@@ -824,13 +824,6 @@ static const struct it87_devices it87_devices[] = {
 #define has_mmio(data)		((data)->features & FEAT_MMIO)
 #define has_four_temp(data)	((data)->features & FEAT_FOUR_TEMP)
 
-#define GPLED_TO_LOCATION(GP_LED) \
-	({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
-#define LOCATION_TO_GPLED(LOCATION) \
-	({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
-
-static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
-
 struct it87_sio_data {
 	enum chips type;
 	u8 sioaddr;
@@ -2672,11 +2665,6 @@ static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
 /* #### IT8625 GP LED blinking control #### */
 
-//#define GPLED_TO_LOCATION(GP_LED) ({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
-//#define LOCATION_TO_GPLED(LOCATION) ({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
-
-// static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
-
 // Documentation:
 // IT8625E programming example, in Chinese: https://icode.best/i/96302341329066
 // Translation: https://icode-best.translate.goog/i/96302341329066?_x_tr_sl=zh-CN&_x_tr_tl=en
@@ -2684,42 +2672,95 @@ static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 // also, the table below and the commented out macros above are from asustors GPL kernel code
 // (that seems to be incomplete, which wouldn't really be GPL-compliant..)
 // from https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
+// and of course see also research/LED-Blinking.txt
 
-/* GP LED BLINK CONTROL */
-#if 0 //defined(CONFIG_GPIO_IT87)
-int it87_gpio_led_blink_get(u8 index);
-int it87_gpio_led_blink_set(u8 index, u32 gpio);
-int it87_gpio_led_blink_freq_get(u8 index);
-int it87_gpio_led_blink_freq_set(u8 index, u8 mode);
-#else
-#define it87_gpio_led_blink_get(index) 1
-#define it87_gpio_led_blink_set(index, gpio)
-#define it87_gpio_led_blink_freq_get(index) 1
-#define it87_gpio_led_blink_freq_set(index, mode)
-#endif
+#define GPLED_TO_LOCATION(GP_LED) \
+	({ (((GP_LED) / 10) << 3) + ((GP_LED) % 10); })
+#define LOCATION_TO_GPLED(LOCATION) \
+	({ (((LOCATION) >> 3) * 10) + ((LOCATION) & 0x07); })
+
+static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
+
+static int read_gpio_reg(struct it87_data *data, int reg)
+{
+	int sioaddr = data->sioaddr;
+	int err = superio_enter(sioaddr);
+	int ret;
+	if (err)
+		return err;
+
+	superio_select(sioaddr, GPIO);
+	ret = superio_inb(sioaddr, reg);
+	superio_exit(sioaddr, data->doexit);
+
+	return ret;
+}
+
+static int write_gpio_reg(struct it87_data *data, int reg, int val)
+{
+	int sioaddr = data->sioaddr;
+	int err = superio_enter(sioaddr);
+	if (err)
+		return err;
+
+	superio_select(sioaddr, GPIO);
+	superio_outb(sioaddr, reg, val);
+	superio_exit(sioaddr, data->doexit);
+
+	return 0;
+}
 
 static ssize_t show_gpled_blink(struct device *dev, struct device_attribute *attr,
                                 char *buf)
 {
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	struct it87_data *data = dev_get_drvdata(dev);
+	int led_map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
 
-	return sprintf(buf, "%d\n", it87_gpio_led_blink_get(sattr->index));
+	it87_lock(data);
+	int readData = read_gpio_reg(data, led_map_reg);
+	it87_unlock(data);
+
+	int gpled = LOCATION_TO_GPLED(readData & 63);
+	int smbusIsolation = (readData & 128) != 0;
+
+	return sprintf(buf, "0x%X gpled %d smbusIso %d\n", readData, gpled, smbusIsolation);
 }
 
 static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr,
                                const char *buf, size_t count)
 {
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	struct it87_data *data = dev_get_drvdata(dev);
+	int led_map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
 	long val;
+	ssize_t ret = count;
 
 	// WTF - val is supposed to be < 70, and its second digit < 8 ?!
-	// might be gpio index or sth
-	if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 6)
+	// probably corresponds to it87_gpXY where Y is always <= 7
+	// => probably need to map from gpXY to location?
+	if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 8) {
+		pr_info("set_gpled_blink(): invalid value %s\n", buf);
 		return -EINVAL;
+	}
 
-	it87_gpio_led_blink_set(sattr->index, val);
+	u32 loc = GPLED_TO_LOCATION(val);
 
-	return count;
+	it87_lock(data);
+	int readData = read_gpio_reg(data, led_map_reg);
+	if(readData >= 0) {
+		int v = (readData & 192) | loc; // preserve bits 6 and 7
+		int e = write_gpio_reg(data, led_map_reg, v);
+		if(e) {
+			pr_info("set_gpled_blink(): write_gpio_reg() returned %d\n", e);
+		}
+	} else {
+		pr_info("set_gpled_blink(): read_gpio_reg() returned %d\n", readData);
+		ret = readData;
+	}
+	it87_unlock(data);
+
+	return ret;
 }
 
 /*
@@ -2765,6 +2806,8 @@ static u8 regvals_to_blink_mode(u8 regvals)
 	return ret;
 }
 
+static const u8 IT87_REG_GP_LED_CTRL_FREQ[] = {0xf9, 0xfb};
+
 const char * blink_freq_desc[] = {
     "0.125s	OFF	0.125s ON", "0.5s OFF 0.5s ON", "2s	OFF	2s ON", "0.25s OFF 0.25s ON", "1s OFF 3s ON", "3s OFF 1s ON",
     "2s	OFF	6s ON", "6s	OFF	2s ON", "0.5s OFF 2s ON", "1S OFF 1S ON", "4S OFF 4S ON"
@@ -2773,15 +2816,22 @@ const char * blink_freq_desc[] = {
 static ssize_t show_gpled_blink_freq(struct device * dev, struct device_attribute *attr, char *buf)
 {
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
-	
-	//u8 reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING
-	return sprintf(buf, "idx %d", sattr->index);
-#if 0
-	u8 regval = 0; // TODO: get from blinking control register (0xF9 or 0xFB)
-	int mode = regvals_to_blink_mode(regval);
+	struct it87_data *data = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
-#endif
+	u8 led_ctrl_reg = IT87_REG_GP_LED_CTRL_FREQ[sattr->index];
+
+	it87_lock(data); // TODO: check error.. or, actually: use it87_update_device() etc
+	int readData = read_gpio_reg(data, led_ctrl_reg);
+	it87_unlock(data);
+
+	int mode = regvals_to_blink_mode(readData);
+
+	int short_pulse = (readData & BIT(5)) != 0;
+	int pin_map_reg_clear = (readData & BIT(4)) != 0;
+	int blink_out_low_enab = readData & BIT(0);
+
+	return sprintf(buf, "0x%X %d (%s) sp %d pmrc %d bole %d\n", readData, mode, blink_freq_desc[mode], short_pulse, pin_map_reg_clear, blink_out_low_enab);
+	//return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
 }
 
 static ssize_t set_gpled_blink_freq(struct device *dev, struct device_attribute *attr,
@@ -3820,6 +3870,8 @@ static int __init it87_find(int sioaddr, unsigned short *address,
 			 */
 			if (!(reg26 & BIT(4)))
 				sio_data->skip_fan |= BIT(4);
+
+			// TODO: sth about blinking?
 		}
 
 		/* Check for pwm6, fan6 */
@@ -4355,7 +4407,7 @@ static int it87_probe(struct platform_device *pdev)
 	data->groups[1] = &it87_group_in;
 	data->groups[2] = &it87_group_temp;
 	data->groups[3] = &it87_group_fan;
-	
+
 	data->groups[4] = &it87_group_gpled_blink;
 
 	if (enable_pwm_interface) { // FIXME: asustor uses if(true)
