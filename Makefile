@@ -3,7 +3,8 @@ KERNEL_MODULES := /lib/modules/$(TARGET)
 KERNEL_BUILD   := $(KERNEL_MODULES)/build
 SYSTEM_MAP     := /boot/System.map-$(TARGET)
 DRIVER         := asustor asustor_it87 asustor_gpio_it87
-DRIVER_VERSION ?= $(shell git describe --long)
+DRIVER_VERSION := v0.1
+#DRIVER_VERSION ?= $(shell git describe --long)
 
 # DKMS
 DKMS_ROOT_PATH_ASUSTOR=/usr/src/asustor-$(DRIVER_VERSION)
@@ -64,10 +65,14 @@ dkms:
 	@dkms install --force -m asustor -v $(DRIVER_VERSION)
 	@dkms install --force -m asustor-it87 -v $(DRIVER_VERSION)
 	@dkms install --force -m asustor-gpio-it87 -v $(DRIVER_VERSION)
-	@modprobe asustor-gpio-it87 asustor asustor_it87
+	@modprobe asustor_gpio_it87
+	@modprobe asustor_it87
+	@modprobe asustor
 
 dkms_clean:
-	@rmmod asustor asustor_it87
+	@rmmod asustor 2> /dev/null || true
+	@rmmod asustor_it87 2> /dev/null || true
+	@rmmod asustor_gpio_it87 2> /dev/null || true
 	@dkms remove -m asustor -v $(DRIVER_VERSION) --all
 	@dkms remove -m asustor-it87 -v $(DRIVER_VERSION) --all
 	@dkms remove -m asustor-gpio-it87 -v $(DRIVER_VERSION) --all
