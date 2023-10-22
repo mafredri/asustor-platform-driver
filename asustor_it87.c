@@ -51,16 +51,6 @@
  *
  *  Copyright (C) 2001 Chris Gauthron
  *  Copyright (C) 2005-2010 Jean Delvare <jdelvare@suse.de>
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -106,10 +96,6 @@ static bool mmio;
 module_param(mmio, bool, 0000);
 MODULE_PARM_DESC(mmio, "Use MMIO if available");
 
-// TODO: what about the following functions?
-//bool to_load_it87(void);
-//bool asustor_model_check(const char *model_name);
-
 static struct platform_device *it87_pdev[2];
 
 #define	REG_2E	0x2e	/* The register to read/write */
@@ -135,7 +121,6 @@ static inline void __superio_enter(int ioreg)
 static inline int superio_inb(int ioreg, int reg)
 {
 	outb(reg, ioreg);
-    // TODO: asustor assigns this to int val and returns that, does that make sense?
 	return inb(ioreg + 1);
 }
 
@@ -395,6 +380,8 @@ struct it87_devices {
 #define FEAT_MMIO		BIT(26)	/* Chip supports MMIO */
 #define FEAT_FOUR_TEMP		BIT(27)
 
+#define FEAT_BLINK_CTRL		BIT(28) /* control blinking of two GPIO LEDs */
+
 static const struct it87_devices it87_devices[] = {
 	[it87] = {
 		.name = "it87",
@@ -440,7 +427,7 @@ static const struct it87_devices it87_devices[] = {
 		.model = "IT8720F",
 		.features = FEAT_16BIT_FANS | FEAT_VID
 			| FEAT_TEMP_OLD_PECI | FEAT_FAN16_CONFIG | FEAT_FIVE_FANS
-			| FEAT_PWM_FREQ2 | FEAT_FANCTL_ONOFF,
+			| FEAT_PWM_FREQ2 | FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		.num_temp_limit = 3,
 		.num_temp_offset = 3,
 		.num_temp_map = 3,
@@ -685,7 +672,7 @@ static const struct it87_devices it87_devices[] = {
 		.features = FEAT_NEWER_AUTOPWM | FEAT_16BIT_FANS
 			| FEAT_AVCC3 | FEAT_NEW_TEMPMAP
 			| FEAT_11MV_ADC | FEAT_IN7_INTERNAL | FEAT_SIX_FANS
-			| FEAT_SIX_PWM | FEAT_BANK_SEL | FEAT_SCALING,
+			| FEAT_SIX_PWM | FEAT_BANK_SEL | FEAT_SCALING | FEAT_BLINK_CTRL,
 		.num_temp_limit = 6,
 		.num_temp_offset = 6,
 		.num_temp_map = 6,
@@ -848,7 +835,7 @@ struct it87_sio_data {
  * The structure is dynamically allocated.
  */
 struct it87_data {
-	const struct attribute_group *groups[7 + 1];
+	const struct attribute_group *groups[7 + 1]; /* +1 for the gpled group */
 	enum chips type;
 	u32 features;
 	u8 peci_mask;
@@ -1333,6 +1320,7 @@ static struct it87_data *it87_update_device(struct device *dev)
 			 */
 			data->vid &= 0x3f;
 		}
+
 		data->last_updated = jiffies;
 		data->valid = true;
 		smbus_enable(data);
@@ -2684,28 +2672,55 @@ static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
 static int read_gpio_reg(struct it87_data *data, int reg)
 {
 	int sioaddr = data->sioaddr;
-	int err = superio_enter(sioaddr);
-	int ret;
-	if (err)
+	int err, ret;
+
+	it87_lock(data); // TODO: check error; and is this even necessary?
+	err = superio_enter(sioaddr);
+	if (err) {
+		it87_unlock(data); // TODO: needed?
 		return err;
+	}
 
 	superio_select(sioaddr, GPIO);
 	ret = superio_inb(sioaddr, reg);
 	superio_exit(sioaddr, data->doexit);
 
+	it87_unlock(data); // TODO: needed?
+
 	return ret;
 }
 
-static int write_gpio_reg(struct it87_data *data, int reg, int val)
+
+// update the (u8) value in a GPIO reg, by reading the old value and keeping old_val & bits_to_keep
+// (setting the register to val | (old_val & bits_to_keep))
+// assumes that (val & bits_to_keep) == 0;
+// set bits_to_keep to 0 for a simple write that replaces the whole value in the register
+static int update_gpio_reg(struct it87_data *data, int reg, int val, int bits_to_keep)
 {
 	int sioaddr = data->sioaddr;
-	int err = superio_enter(sioaddr);
-	if (err)
+	int err;
+
+	// TODO: should this use the spinlock of asustor_gpio_it87.c's &it87_gpio->lock ?
+	//       or maybe use the it87_gpio_get() functions etc that are exported by that module?
+	it87_lock(data); // TODO: check error; and is this even necessary?
+
+	err = superio_enter(sioaddr);
+	if (err) {
+		it87_unlock(data); // TODO: needed?
 		return err;
+	}
 
 	superio_select(sioaddr, GPIO);
+	if(bits_to_keep != 0) {
+		int old_val = superio_inb(sioaddr, reg);
+		// val &= ~bits_to_keep;
+		val |= (old_val & bits_to_keep);
+	}
 	superio_outb(sioaddr, reg, val);
+
 	superio_exit(sioaddr, data->doexit);
+
+	it87_unlock(data); // TODO: needed?
 
 	return 0;
 }
@@ -2716,15 +2731,16 @@ static ssize_t show_gpled_blink(struct device *dev, struct device_attribute *att
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
 	struct it87_data *data = dev_get_drvdata(dev);
 	int led_map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
+	int gpled, smbus_isolation;
 
-	it87_lock(data);
-	int readData = read_gpio_reg(data, led_map_reg);
-	it87_unlock(data);
+	int reg_val = read_gpio_reg(data, led_map_reg);
+	if(reg_val < 0)
+		return reg_val;
 
-	int gpled = LOCATION_TO_GPLED(readData & 63);
-	int smbusIsolation = (readData & 128) != 0;
+	gpled = LOCATION_TO_GPLED(reg_val & 63);
+	smbus_isolation = (reg_val & 128) != 0;
 
-	return sprintf(buf, "0x%X gpled %d smbusIso %d\n", readData, gpled, smbusIsolation);
+	return sprintf(buf, "0x%X gpled %d smbusIso %d\n", reg_val, gpled, smbus_isolation);
 }
 
 static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr,
@@ -2733,70 +2749,59 @@ static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
 	struct it87_data *data = dev_get_drvdata(dev);
 	int led_map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
+	int err, loc;
 	long val;
-	ssize_t ret = count;
 
-	// WTF - val is supposed to be < 70, and its second digit < 8 ?!
-	// probably corresponds to it87_gpXY where Y is always <= 7
-	// => probably need to map from gpXY to location?
+	/* the input value is like in it87_gpXY, where Y is 0..7 as it's a bit index apparently?
+	   and, as far as I can tell, X <= 8 */
 	if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 8) {
 		pr_info("set_gpled_blink(): invalid value %s\n", buf);
 		return -EINVAL;
 	}
 
-	u32 loc = GPLED_TO_LOCATION(val);
+	loc = GPLED_TO_LOCATION(val);
+	/* preserve bits 6 and 7 of the register, replace the rest with loc */
+	err = update_gpio_reg(data, led_map_reg, loc, BIT(6) | BIT(7));
+	if(err)
+		return err;
 
-	it87_lock(data);
-	int readData = read_gpio_reg(data, led_map_reg);
-	if(readData >= 0) {
-		int v = (readData & 192) | loc; // preserve bits 6 and 7
-		int e = write_gpio_reg(data, led_map_reg, v);
-		if(e) {
-			pr_info("set_gpled_blink(): write_gpio_reg() returned %d\n", e);
-		}
-	} else {
-		pr_info("set_gpled_blink(): read_gpio_reg() returned %d\n", readData);
-		ret = readData;
-	}
-	it87_unlock(data);
-
-	return ret;
+	return count;
 }
 
 /*
-	(MODE_INDEX)	(F9h [7:6])	(F9h [3:1])	(Blink frequency & Duty)	(ON/OFF Time)
-	0				00			000:		4Hz,	50% Duty			0.125s	OFF	0.125s	ON
-	1				00			001:		1Hz,	50% Duty			0.5s	OFF	0.5s	ON
-	2				00			010:		0.25Hz,	50% Duty			2s	OFF	2s	ON
-	3				00			011:		2Hz,	50% Duty			0.25s	OFF	0.25s	ON
-	4				00			100:		0.25Hz,	25% Duty			1s	OFF	3s	ON
-	5				00			101:		0.25Hz,	75% Duty			3s	OFF	1s	ON
-	6				00			110:		0.125Hz,25% Duty			2s	OFF	6s	ON
-	7				00			111:		0.125Hz	75% Duty			6s	OFF	2s	ON
-	8				01			XXX			0.4Hz,	20% Duty			0.5s	OFF	2s	ON
-	9				10			XXX			0.5 Hz,	50% Duty			1S	OFF	1S	ON
-	10				11			XXX			0.125Hz, 50% Duty			4S	OFF	4S	ON
+	(MODE_INDEX)  (F9h [7:6])  (F9h [3:1])  (Blink frequency & Duty)  (ON/OFF Time)
+	0             00           000:         4Hz,     50% Duty         0.125s OFF  0.125s ON
+	1             00           001:         1Hz,     50% Duty         0.5s   OFF  0.5s   ON
+	2             00           010:         0.25Hz,  50% Duty         2s     OFF  2s     ON
+	3             00           011:         2Hz,     50% Duty         0.25s  OFF  0.25s  ON
+	4             00           100:         0.25Hz,  25% Duty         1s     OFF  3s     ON
+	5             00           101:         0.25Hz,  75% Duty         3s     OFF  1s     ON
+	6             00           110:         0.125Hz, 25% Duty         2s     OFF  6s     ON
+	7             00           111:         0.125Hz  75% Duty         6s     OFF  2s     ON
+	8             01           XXX          0.4Hz,   20% Duty         0.5s   OFF  2s     ON
+	9             10           XXX          0.5 Hz,  50% Duty         1S     OFF  1S     ON
+	10            11           XXX          0.125Hz, 50% Duty         4S     OFF  4S     ON
 */
 
 // sets (only!) bits 1-3 and 6-7 for the blinking control registers frequency selection
 // depending on the mode index (0-10, see table above or blink_freq_desc[])
-// returns 255 on error (invalid mode)
-static u8 blink_mode_to_regvals(u8 mode)
+// returns -1 on error (invalid mode)
+static int blink_mode_to_regvals(int mode)
 {
-	if(mode < 8) {
+	if(mode < 0 || mode > 10)
+		return -1;
+	if(mode < 8)
 		return mode << 1;
-	} else if(mode <= 10) {
-		mode -= 7; // 8 => 0b01, 9 => 0b10, 10 => 0b11
-		return mode << 6;
-	}
-	return 255;
+	// else: modes 8-10
+	mode -= 7; // 8 => 0b01, 9 => 0b10, 10 => 0b11
+	return mode << 6;
 }
 
 // returns blink freq mode index based on bits 1-3 and 6-7 of regvals from blinking control register
 static u8 regvals_to_blink_mode(u8 regvals)
 {
 	u8 ret;
-	u8 bits67 = regvals & (3u << 6);
+	u8 bits67 = regvals & (BIT(6) | BIT(7));
 	if(bits67 == 0) { // bits 6 and 7 not set => return bits 1 to 3
 		ret = (regvals >> 1) & 7;
 	} else {
@@ -2820,32 +2825,40 @@ static ssize_t show_gpled_blink_freq(struct device * dev, struct device_attribut
 
 	u8 led_ctrl_reg = IT87_REG_GP_LED_CTRL_FREQ[sattr->index];
 
-	it87_lock(data); // TODO: check error.. or, actually: use it87_update_device() etc
-	int readData = read_gpio_reg(data, led_ctrl_reg);
-	it87_unlock(data);
+	int blink_reg_val = read_gpio_reg(data, led_ctrl_reg);
+	if(blink_reg_val < 0) {
+		return blink_reg_val;
+	} else {
+		int mode = regvals_to_blink_mode(blink_reg_val);
 
-	int mode = regvals_to_blink_mode(readData);
+		int short_pulse = (blink_reg_val & BIT(5)) != 0;
+		int pin_map_reg_clear = (blink_reg_val & BIT(4)) != 0;
+		int blink_out_low_enab = blink_reg_val & BIT(0);
 
-	int short_pulse = (readData & BIT(5)) != 0;
-	int pin_map_reg_clear = (readData & BIT(4)) != 0;
-	int blink_out_low_enab = readData & BIT(0);
-
-	return sprintf(buf, "0x%X %d (%s) sp %d pmrc %d bole %d\n", readData, mode, blink_freq_desc[mode], short_pulse, pin_map_reg_clear, blink_out_low_enab);
-	//return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+		return sprintf(buf, "0x%X %d (%s) sp %d pmrc %d bole %d\n", blink_reg_val, mode,
+					   blink_freq_desc[mode], short_pulse, pin_map_reg_clear, blink_out_low_enab);
+		//return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+	}
 }
 
 static ssize_t set_gpled_blink_freq(struct device *dev, struct device_attribute *attr,
                                     const char *buf, size_t count)
 {
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
+	struct it87_data *data = dev_get_drvdata(dev);
+	u8 led_ctrl_reg = IT87_REG_GP_LED_CTRL_FREQ[sattr->index];
+	int err, blink_reg_val;
 	long val;
 
-	if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 11)
+	if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 10)
 		return -EINVAL;
 
-	//it87_gpio_led_blink_freq_set(sattr->index, val);
-	//u8 regval = blink_mode_to_regvals(val);
-	// TODO: get current value, clear bits 1:3 and 6:7, OR with blink_mode_to_regvals(val)
+	blink_reg_val = blink_mode_to_regvals(val);
+
+	/* keep only the bits of the register that aren't part of the frequency mode */
+	err = update_gpio_reg(data, led_ctrl_reg, blink_reg_val, BIT(5) | BIT(4) | BIT(0));
+	if(err)
+		return err;
 
 	return count;
 }
@@ -4246,7 +4259,7 @@ static int it87_probe(struct platform_device *pdev)
 	struct it87_sio_data *sio_data = dev_get_platdata(dev);
 	int enable_pwm_interface;
 	struct device *hwmon_dev;
-	int err;
+	int err, group_idx;
 
 	data = devm_kzalloc(dev, sizeof(struct it87_data), GFP_KERNEL);
 	if (!data)
@@ -4408,15 +4421,20 @@ static int it87_probe(struct platform_device *pdev)
 	data->groups[2] = &it87_group_temp;
 	data->groups[3] = &it87_group_fan;
 
-	data->groups[4] = &it87_group_gpled_blink;
+	group_idx = 4;
+	if(data->features & FEAT_BLINK_CTRL) {
+		data->groups[group_idx] = &it87_group_gpled_blink;
+		++group_idx;
+	}
 
-	if (enable_pwm_interface) { // FIXME: asustor uses if(true)
+	if (enable_pwm_interface) {
 		data->has_pwm = BIT(ARRAY_SIZE(IT87_REG_PWM)) - 1;
 		data->has_pwm &= ~sio_data->skip_pwm;
 
-		data->groups[5] = &it87_group_pwm;
+		data->groups[group_idx] = &it87_group_pwm;
+		++group_idx;
 		if (has_old_autopwm(data) || has_newer_autopwm(data))
-			data->groups[6] = &it87_group_auto_pwm;
+			data->groups[group_idx] = &it87_group_auto_pwm;
 	}
 
 	hwmon_dev = devm_hwmon_device_register_with_groups(dev,
@@ -4596,8 +4614,6 @@ static int __init sm_it87_init(void)
 	bool found = false;
 	int i, err;
 
-    pr_info("it87 driver version %s\n", IT87_DRIVER_VERSION);
-
 	if (dmi)
 		dmi_data = dmi->driver_data;
 
@@ -4657,8 +4673,7 @@ MODULE_DESCRIPTION("IT8705F/IT871xF/IT872xF hardware monitoring driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(IT87_DRIVER_VERSION);
 
-//MODULE_SOFTDEP("pre: asustor-gpio-it87");
-// TODO: MODULE_SOFTDEP() or similar, for hwmon_vid and asustor_gpio_it87
+MODULE_SOFTDEP("pre: hwmon-vid");
 
 module_init(sm_it87_init);
 module_exit(sm_it87_exit);
