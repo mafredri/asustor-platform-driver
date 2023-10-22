@@ -8,23 +8,24 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ## Dependencies
 
-**Note:** All dependencies used by this module are part of the mainline linux kernel, if they're not included by your distribution you may need to compile them yourself.
+**Note:** All other dependencies used by these modules are part of the mainline linux kernel, if they're not included by your distribution you may need to compile them yourself.
 
-- `gpio-it87` (AS6, AS61, AS62)
 - `gpio-ich` (AS6)
+- `hwmon-vid` (for the contained `asustor-it87` module)
 
 ### Optional
 
 - `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX)
   - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
-    and supports more variants of IT86XX and the IT867XX chips than the kernels `it87` driver.
+    and supports more variants of IT86XX and the IT87XX chips than the kernels `it87` driver.
     Furthermore it supports controlling blinking of up to two LEDs.
   - Also includes a patched version of `gpio-it87` called `asustor-gpio-it87`. The only change is supporting
-    the IT8625E that is used in several newer asustor devices.
+    the IT8625E chip that is used in several newer asustor devices.
   - May require adding `acpi_enforce_resources=lax` to kernel boot arguments for full functionality
   - Temperature monitoring (`lm-sensors`)
   - Fan speed regulation via `pwm1`
     - See [`example/fancontrol`](./example/fancontrol) for an example `/etc/fancontrol` config for a AS62 system
+    - `pwm1` etc should be in `/sys/devices/platform/asustor_it87.*/hwmon/hwmon*/`
   - Front panel LED brightness adjustment via `pwm3`
 
 ## Compatibility
@@ -54,15 +55,35 @@ sudo make install
 
 ### Control blinking LEDs
 
-Stop the blinking of the annoying green status LED:
+*Note:* This is probably not supported on all devices, only ones that use the IT8625E chip.
+If your green status LED blinks while and after booting, you probably have a device that works..
+
+Stop that annoying blinking of the green status LED:
 ```
 echo 0 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink
 ```
 
 You can re-enable it with `echo 47 | sudo tee ...` because the status led is it87_gp**47**.
-Similarly, you can make other GPIO LEDs blink.
+Similarly, you can make other GPIO LEDs blink. Note that this can be done for two LEDs, as `gpled2_blink` also exists.
 
-_**TODO:** describe in more detail, including frequency setting_  
+You can also configure the blinking frequency to one of 11 supported modes,
+for example, set mode 3 with:
+```
+echo 3 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
+```
+The following blinking frequency modes exist:
+* **0** - 0.125s Off 0.125s On
+* **1** - 0.5s Off 0.5s On
+* **2** - 2s	Off	2s On
+* **3** - 0.25s Off 0.25s On
+* **4** - 1s Off 3s On
+* **5** - 3s Off 1s On
+* **6** - 2s Off	6s On
+* **7** - 6s Off	2s On
+* **8** - 0.5s Off 2s On
+* **9** - 1s Off 1s On
+* **10** - 4s Off 4s On
+
 _**TODO:** figure out how to make the status LED light up permanently_
 
 ### `it87` and PWM polarity
