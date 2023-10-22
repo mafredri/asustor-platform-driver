@@ -1,108 +1,118 @@
-//#define GPLED_TO_LOCATION(GP_LED) ({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
-//#define LOCATION_TO_GPLED(LOCATION) ({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
 
-// static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
+IT8625E programming example, in Chinese: https://icode.best/i/96302341329066
+Translation: https://icode-best.translate.goog/i/96302341329066?_x_tr_sl=zh-CN&_x_tr_tl=en
 
-// Documentation:
-// IT8625E programming example, in Chinese: https://icode.best/i/96302341329066
-// Translation: https://icode-best.translate.goog/i/96302341329066?_x_tr_sl=zh-CN&_x_tr_tl=en
-// https://github.com/mafredri/asustor-platform-driver/issues/2#issuecomment-1370636769
-// not quite the same chip, but a bit helpful anyway: http://www.datasheet39.com/PDF/739483/IT8720F-datasheet.html
-// also, the table below and the commented out macros above are from asustors GPL kernel code
-// (that seems to be incomplete, which wouldn't really GPL-conformant..)
-// from https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
+https://github.com/mafredri/asustor-platform-driver/issues/2#issuecomment-1370636769
+
+Not the same chip, but blinking control seems to be the same
+(but no BREATH support): http://www.datasheet39.com/PDF/739483/IT8720F-datasheet.html
+
+The frequency table below and the macros and IT87_REG_GP_LED_CTRL_PIN_MAPPING[]
+are from asustors GPL kernel code (that seems to be very incomplete, which
+wouldn't really be GPL-conformant..), can be downloaded at:
+https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
+
+	#define GPLED_TO_LOCATION(GP_LED) ({ ((GP_LED / 10) << 3) + (GP_LED % 10); })
+	#define LOCATION_TO_GPLED(LOCATION) ({ ((LOCATION >> 3) * 10) + (LOCATION & 0x07); })
+
+	static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
+
+Bits for GP LED Blinking Pin Mapping Register (Index F8h for LED Blinking 1, FAh for 2)
+* 7   SMBus Isolation on GP92-95 0: Bypass (Default, AVCC3 ON), 1: Isolation (AVCC3 OFF)
+* 6   (Reserved)
+* 5:0 GP LED Blinking 1 Location (from GPLED_TO_LOCATION() macro),
+      see also Location Mapping Table at the end of this file
+
+Bits for GP LED Blinking Control Register (Index F9h for LED Blinking 1, FBh for 2)
+* 7:6 also frequency selection, see table below
+* 5   "GP LED Blinking 1 Short Low Pulse Enable"
+* 4   "LED Blinking 1 Pin Mapping Register Clear" 0: Disable 1: Enable
+      "This function is activated when PANSWH# is low for over 4 seconds"
+      PANSWH# = "Main Power Switch Button Input #" apparently?
+      OR GP43, depending on bit 3 of reg 28h (Multi-Function Pin Slection Register),
+      at least on IT8720F
+* 3:1 frequency selection, see table below
+* 0   "GP LED Blinking 1 Output Low Enable"
+
+	(MODE_INDEX)  (F9h [7:6])  (F9h [3:1])  (Blink frequency & Duty)  (ON/OFF Time)
+	0             00           000:         4Hz,     50% Duty         0.125s OFF  0.125s ON
+	1             00           001:         1Hz,     50% Duty         0.5s   OFF  0.5s   ON
+	2             00           010:         0.25Hz,  50% Duty         2s     OFF  2s     ON
+	3             00           011:         2Hz,     50% Duty         0.25s  OFF  0.25s  ON
+	4             00           100:         0.25Hz,  25% Duty         1s     OFF  3s     ON
+	5             00           101:         0.25Hz,  75% Duty         3s     OFF  1s     ON
+	6             00           110:         0.125Hz, 25% Duty         2s     OFF  6s     ON
+	7             00           111:         0.125Hz  75% Duty         6s     OFF  2s     ON
+	8             01           XXX          0.4Hz,   20% Duty         0.5s   OFF  2s     ON
+	9             10           XXX          0.5 Hz,  50% Duty         1S     OFF  1S     ON
+	10            11           XXX          0.125Hz, 50% Duty         4S     OFF  4S     ON
+
+DAh Bits, for Breath LED Control Register 1
+* 6:7 (Reserved)
+* 5:4 BREATH LED Maximum Duty Cycle Select (HMXD)
+      00b: 40h; 01b: 80h; 10b: C0h; 11b: FFh
+* 3:2 BREATH LED Duty Decreasing Step (DDS) - same values as DIS
+* 1:0 BREATH LED Duty Increasing Step (DIS)
+      00b: 1h; 01b: 2h; 10b: 4h; 11b: 8h
+
+DBh Bits, for Breath LED Control Register 2
+* 7   BREATH LED BLINK Enable - 0: Disable; 1; Enable
+      Note: Breathing LED function is for LED Blinking 1 only.
+* 6:4 BREATH LED Maximum Duty Cycle Delay Period (HMXDD)
+      same values as HZDD
+* 3   (Reserved)
+* 2:0 BREATH LED Zero Duty Cycle Delay Period (HZDD)
+      011b: 1/2 s; 100b: 1s; 101b: 2s; 110b: 4s
+
+Note: According to https://icode.best/i/96302341329066, BREATH can only be configured for LED1
+Furthermore, the BREATH stuff above is only for reference, I didn't implement support for it.
 
 
-	Bits for GP LED Blinking Pin Mapping Register (Index F8h for LED Blinking 1, FAh for 2)
-	* 7   SMBus Isolation on GP92-95 0: Bypass (Default, AVCC3 ON), 1: Isolation (AVCC3 OFF)
-	* 6   (Reserved)
-	* 5:0 GP LED Blinking 1 Location (presumably from GPLED_TO_LOCATION() macro?),
-	  see also Location Mapping Table
-
-	Bits for GP LED Blinking Control Register (Index F9h for LED Blinking 1, FBh for 2)
-	* 7:6 also frequency selection, see table below
-	* 5   "GPL LED Blinking 1 Short Low Pulse Enable"
-	* 4   "LED Blinking 1 Pin Mapping Register Clear" 0: Disable 1: Enable
-	      "This function is activated when PANSWH# is low for over 4 seconds"
-	      PANSWH# = "Main Power Switch Button Input #" apparently?
-	      OR GP43, depending on bit 3 of reg 28h (Multi-Function Pin Slection Register), at least on IT8720F
-	* 3:1 frequency selection, see table below
-	* 0   "GP LED Blinking 1 Output Low Enable"
-	
-	NOTE: Unsure if Blinking LED 2 (FAh/FBh) exists on IT8265E, but it does on IT8720F)
-
-	DAh Bits, for Breath LED Control Register 1
-	* 6:7 (Reserved)
-	* 5:4 BREATH LED Maximum Duty Cycle Select (HMXD)
-	      00b: 40h; 01b: 80h; 10b: C0h; 11b: FFh
-	* 3:2 BREATH LED Duty Decreasing Step (DDS) - same values as DIS
-	* 1:0 BREATH LED Duty Increasing Step (DIS)
-	      00b: 1h; 01b: 2h; 10b: 4h; 11b: 8h
-
-	DBh Bits, for Breath LED Control Register 2
-	* 7   BREATH LED BLINK Enable - 0: Disable; 1; Enable
-	      Note: Breathing LED function is for LED Blinking 1 only.
-	* 6:4 BREATH LED Maximum Duty Cycle Delay Period (HMXDD)
-	      same values as HZDD
-	* 3   (Reserved)
-	* 2:0 BREATH LED Zero Duty Cycle Delay Period (HZDD)
-	      011b: 1/2 s; 100b: 1s; 101b: 2s; 110b: 4s
-
-	Note: According to https://icode.best/i/96302341329066, BREATH can only be configured for LED1
-
-	(MODE_INDEX)	(F9h [7:6])	(F9h [3:1])	(Blink frequency & Duty)	(ON/OFF Time)
-	0		00		000:		4Hz,	50% Duty		0.125s	OFF	0.125s	ON
-	1		00		001:		1Hz,	50% Duty		0.5s	OFF	0.5s	ON
-	2		00		010:		0.25Hz,	50% Duty		2s	OFF	2s	ON
-	3		00		011:		2Hz,	50% Duty		0.25s	OFF	0.25s	ON
-	4		00		100:		0.25Hz,	25% Duty		1s	OFF	3s	ON
-	5		00		101:		0.25Hz,	75% Duty		3s	OFF	1s	ON
-	6		00		110:		0.125Hz,25% Duty		2s	OFF	6s	ON
-	7		00		111:		0.125Hz	75% Duty		6s	OFF	2s	ON
-	8		01		XXX		0.4Hz,	20% Duty		0.5s	OFF	2s	ON
-	9		10		XXX		0.5 Hz,	50% Duty		1S	OFF	1S	ON
-	10		11		XXX		0.125Hz, 50% Duty		4S	OFF	4S	ON
-	
-	Location Mapping Table (on IT8720F):
+Location Mapping Table (of IT8720F):
 	Location        Description
-	001 000 (0x08 =  8)  GP10 (pin 84). Powered by VCCH.
-	001 001 (0x09 =  9)  GP11 (pin 34).
-	001 010 (0x0A = 10)  GP12 (pin 33).
-	001 011 (0x0B = 11)  GP13 (pin 32).
-	001 100 (0x0C = 12)  GP14 (pin 31).
-	001 101 (0x0D = 13)  GP15 (pin 3).
-	001 110 (0x0E = 14)  GP16 (pin 2).
-	001 111 (0x0F = 15)  GP17 (pin 28).
-	010 000 (0x10 = 16)  GP20 (pin 27). Powered by VCCH.
-	010 001 (0x11 = 17)  GP21 (pin 26). Powered by VCCH.
-	010 010 (0x12 = 18)  GP22 (pin 25). Powered by VCCH.
-	010 011 (0x13 = 19)  GP23 (pin 24). Powered by VCCH.
-	010 100 (0x14 = 20)  GP24 (pin 23). Powered by VCCH.
-	010 101 (0x15 = 21)  GP25 (pin 22). Powered by VCCH.
-	010 110 (0x16 = 22)  GP26 (pin 21). Powered by VCCH.
-	010 111 (0x17 = 23)  GP27 (pin 20). Powered by VCCH.
-	011 000 (0x18 = 24)  GP30 (pin 19).
-	011 001 (0x19 = 25)  GP31 (pin 18).
-	011 010 (0x1A = 26)  GP32 (pin 17).
-	011 011 (0x1B = 27)  GP33 (pin 16).
-	011 100 (0x1C = 28)  GP34 (pin 14).
-	011 101 (0x1D = 29)  GP35 (pin 13).
-	011 110 (0x1E = 30)  GP36 (pin 12).
-	011 111 (0x1F = 31)  GP37 (pin 11).
-	100 000 (0x20 = 32)  GP40 (pin 79). Powered by VCCH.
-	100 001 (0x21 = 33)  GP41 (pin 78). Powered by VCCH.
-	100 010 (0x22 = 34)  GP42 (pin 76). Powered by VCCH.
-	100 011 (0x23 = 35)  GP43 (pin 75). Powered by VCCH.
-	100 100 (0x24 = 36)  GP44 (pin 72). Powered by VCCH.
-	100 110 (0x25 = 37)  GP46 (pin 70). Powered by VCCH.
-	100 111 (0x26 = 38)  GP47 (pin 66).
-	101 000 (0x27 = 39)  GP50 (pin 48).
-	101 001 (0x28 = 41)  GP51 (pin 10).
-	101 010 (0x29 = 42)  GP52 (pin 9).
-	101 011 (0x2A = 43)  GP53 (pin 77). Powered by VCCH.
-	101 100 (0x2B = 44)  GP54 (pin 73). Powered by VCCH.
-	101 101 (0x2C = 45)  GP55 (pin 85). Powered by VCCH.
-	101 110 (0x2D = 46)  GP56 (pin 83). Powered by VCCH.
-	101 111 (0x2E = 47)  GP57 (pin 82). Powered by VCCH.
+	001 000 (0x08 =  8)   GP10 (pin 84). Powered by VCCH.
+	001 001 (0x09 =  9)   GP11 (pin 34).
+	001 010 (0x0A = 10)   GP12 (pin 33).
+	001 011 (0x0B = 11)   GP13 (pin 32).
+	001 100 (0x0C = 12)   GP14 (pin 31).
+	001 101 (0x0D = 13)   GP15 (pin 3).
+	001 110 (0x0E = 14)   GP16 (pin 2).
+	001 111 (0x0F = 15)   GP17 (pin 28).
+
+	010 000 (0x10 = 16)   GP20 (pin 27). Powered by VCCH.
+	010 001 (0x11 = 17)   GP21 (pin 26). Powered by VCCH.
+	010 010 (0x12 = 18)   GP22 (pin 25). Powered by VCCH.
+	010 011 (0x13 = 19)   GP23 (pin 24). Powered by VCCH.
+	010 100 (0x14 = 20)   GP24 (pin 23). Powered by VCCH.
+	010 101 (0x15 = 21)   GP25 (pin 22). Powered by VCCH.
+	010 110 (0x16 = 22)   GP26 (pin 21). Powered by VCCH.
+	010 111 (0x17 = 23)   GP27 (pin 20). Powered by VCCH.
+
+	011 000 (0x18 = 24)   GP30 (pin 19).
+	011 001 (0x19 = 25)   GP31 (pin 18).
+	011 010 (0x1A = 26)   GP32 (pin 17).
+	011 011 (0x1B = 27)   GP33 (pin 16).
+	011 100 (0x1C = 28)   GP34 (pin 14).
+	011 101 (0x1D = 29)   GP35 (pin 13).
+	011 110 (0x1E = 30)   GP36 (pin 12).
+	011 111 (0x1F = 31)   GP37 (pin 11).
+
+	100 000 (0x20 = 32)   GP40 (pin 79). Powered by VCCH.
+	100 001 (0x21 = 33)   GP41 (pin 78). Powered by VCCH.
+	100 010 (0x22 = 34)   GP42 (pin 76). Powered by VCCH.
+	100 011 (0x23 = 35)   GP43 (pin 75). Powered by VCCH.
+	100 100 (0x24 = 36)   GP44 (pin 72). Powered by VCCH.
+	// XXX: what about 100 101 (37) and GP45 ?
+	100 110 (0x26 = 38)   GP46 (pin 70). Powered by VCCH.
+	100 111 (0x27 = 39)   GP47 (pin 66).
+
+	101 000 (0x27 = 39)   GP50 (pin 48).
+	101 001 (0x28 = 41)   GP51 (pin 10).
+	101 010 (0x29 = 42)   GP52 (pin 9).
+	101 011 (0x2A = 43)   GP53 (pin 77). Powered by VCCH.
+	101 100 (0x2B = 44)   GP54 (pin 73). Powered by VCCH.
+	101 101 (0x2C = 45)   GP55 (pin 85). Powered by VCCH.
+	101 110 (0x2D = 46)   GP56 (pin 83). Powered by VCCH.
+	101 111 (0x2E = 47)   GP57 (pin 82). Powered by VCCH.
 	 Else                 Reserved
 
