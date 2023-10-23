@@ -17,23 +17,6 @@ https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
 
 	static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
 
-Bits for GP LED Blinking Pin Mapping Register (Index F8h for LED Blinking 1, FAh for 2)
-* 7   SMBus Isolation on GP92-95 0: Bypass (Default, AVCC3 ON), 1: Isolation (AVCC3 OFF)
-* 6   (Reserved)
-* 5:0 GP LED Blinking 1 Location (from GPLED_TO_LOCATION() macro),
-      see also Location Mapping Table at the end of this file
-
-Bits for GP LED Blinking Control Register (Index F9h for LED Blinking 1, FBh for 2)
-* 7:6 also frequency selection, see table below
-* 5   "GP LED Blinking 1 Short Low Pulse Enable"
-* 4   "LED Blinking 1 Pin Mapping Register Clear" 0: Disable 1: Enable
-      "This function is activated when PANSWH# is low for over 4 seconds"
-      PANSWH# = "Main Power Switch Button Input #" apparently?
-      OR GP43, depending on bit 3 of reg 28h (Multi-Function Pin Slection Register),
-      at least on IT8720F
-* 3:1 frequency selection, see table below
-* 0   "GP LED Blinking 1 Output Low Enable"
-
 	(MODE_INDEX)  (F9h [7:6])  (F9h [3:1])  (Blink frequency & Duty)  (ON/OFF Time)
 	0             00           000:         4Hz,     50% Duty         0.125s OFF  0.125s ON
 	1             00           001:         1Hz,     50% Duty         0.5s   OFF  0.5s   ON
@@ -46,6 +29,89 @@ Bits for GP LED Blinking Control Register (Index F9h for LED Blinking 1, FBh for
 	8             01           XXX          0.4Hz,   20% Duty         0.5s   OFF  2s     ON
 	9             10           XXX          0.5 Hz,  50% Duty         1S     OFF  1S     ON
 	10            11           XXX          0.125Hz, 50% Duty         4S     OFF  4S     ON
+	// the following mode is not supported by asustors proprietary kernels:
+	11            XX           XXX but also setting bit F9h/FBh [0] to 1     Always On
+
+Bits for GP LED Blinking Pin Mapping Register (Index F8h for LED Blinking 1, FAh for 2)
+* 7   SMBus Isolation on GP92-95 0: Bypass (Default, AVCC3 ON), 1: Isolation (AVCC3 OFF)
+      On some other chips like IT8720F, this bit was just Reserved
+* 6   (Reserved)
+* 5:0 GP LED Blinking 1 Location (from GPLED_TO_LOCATION() macro),
+      see also Location Mapping Table at the end of this file
+      (Note that I couldn't get this to work with other LEDs than GP47, aka green:status)
+
+Bits for GP LED Blinking Control Register (Index F9h for LED Blinking 1, FBh for 2), on IT8625E:
+* 7:6 also frequency selection, see table below
+* 5   "GP LED Blinking 1 Short Low Pulse Enable"
+      Somehow makes the "On" cycles shorter - seems kinda redundant with the 20/25% duty cycles?
+* 4   "LED Blinking 1 Pin Mapping Register Clear" 0: Disable 1: Enable
+      "This function is activated when PANSWH# is low for over 4 seconds"
+      PANSWH# = "Main Power Switch Button Input #" apparently?
+      OR GP43, depending on bit 3 of reg 28h (Multi-Function Pin Slection Register),
+      at least on IT8720F
+* 3:1 frequency selection, see table below
+* 0   "GP LED Blinking 1 Output Low Enable"
+      "If set to 1, this PIN will always output low and can be used to control
+       the status of non-S3 LEDs. For example, when S0 is set, the output is
+       low and the LED is always on (provided that the LED hardware is
+       set to low-level conduction)." (from translated https://icode.best/i/96302341329066)
+      In practice, at least on my AS5402T, setting this bit seems to make the LED light up
+      constantly, so I'll add this as mode 11
+
+Other chips also support blinking control, but might support fewer modes, maybe only 0-3 or 0-7,
+and the modes might be different. I *think* that mode 11 for "always on" should work for the vast
+majority, at least the bit set there was listed in all datasheets (but never really described).
+
+On IT8712F, IT8720F, IT8722F, IT8728F, IT8772E IT8781F - IT8783F, IT8783E
+the blinking control register is slightly different, but (probably?)
+mostly compatible (for modes 1-7 and 11):
+* 0   "GP LED blinking X output low enable", same as IT8625E
+* 1-2 frequency control (0: 4Hz, 1: 1Hz, 2: 0.25Hz, 3: 0.125Hz)
+* 3   LED blinking short low pulse enable - seems to make the "on" cycles shorter
+* 4-7 Reserved
+
+NOTE: It's quite possible (and probable) that more IT87xx chips behave like this,
+these are the ones I could find data sheets for.
+
+On IT8673F, it's quite different. Everything is still in the GPIO (LDN=07h) space,
+but the registers are very different (seems to be a rather old chip)..
+see also http://www.datasheet39.com/PDF/502101/IT8673F-datasheet.html
+I'm documenting this here for the sake of completeness, but will not implement it.
+
+F8h is the "Panel Button De-bounce Control Register/GP LED Blinking 2 Control Register":
+* 7   GP LED 2 short low pulse enable
+* 6:5 GP LED 2 frequency control (0: 4Hz, 1: 1Hz, 2: 0.25Hz, 3: 0.125Hz)
+* 4   GP LED Output low enable
+* 3   IRQ output mode 0: Edge mode 1: Level mode (?!)
+* 2   IRQ output enable (0: disable, 1: enable)
+* 1:0 De-bounce time selection. 0: 8ms, 1: 16ms, 2: 32ms, 3: 64ms (?!)
+
+FAh is the "GP LED Blinking 1 Pin Mapping Register", FCh is the same for GP LED Blinking 2
+* 7:6 Reserved
+* 5:0 GP LED Blinking 1 Location
+  Mapping like in the newer chips, but only goes up to 001 111 / GPIO17
+
+FBh is the "GP LED Blinking Control and RING# Pin Mapping Register"
+* 7   Reserved
+* 6-4 Location of RING# (whatever that is, something about powering on a machine from Modem or Fax)
+* 3   GPL LED 1 short low pulse enable
+* 2-1 GP LED 1 frequency control (0: 4Hz, 1: 1Hz, 2: 0.25Hz, 3: 0.125Hz)
+* 0   GP LED 1 Output low enabled
+
+GPIO LED Location Mapping:
+ 001 000  -  GPIO10 (pin 66)
+ 001 001  -  GPIO11 (pin 90). Powered by VCCH
+ 001 010  -  GPIO12 (pin 73)
+ 001 011  -  GPIO13 (pin 72)
+ 001 100  -  GPIO14 (pin 71)
+ 001 101  -  GPIO15 (pin 70)
+ 001 110  -  GPIO16 (pin 69)
+ 001 111  -  GPIO17 (pin 68)
+
+IT8671F and IT8687R are even more different, just a link for that (they're even older):
+http://www.datasheet39.com/PDF/637606/IT8687R-datasheet.html
+
+### IT8625E Breath LED Control ###
 
 DAh Bits, for Breath LED Control Register 1
 * 6:7 (Reserved)
@@ -65,7 +131,9 @@ DBh Bits, for Breath LED Control Register 2
       011b: 1/2 s; 100b: 1s; 101b: 2s; 110b: 4s
 
 Note: According to https://icode.best/i/96302341329066, BREATH can only be configured for LED1
-Furthermore, the BREATH stuff above is only for reference, I didn't implement support for it.
+Furthermore, the BREATH stuff above is only for reference, I didn't implement support for it,
+and I couldn't find any reference to it in any public data sheet, so it might be only implemented
+in IT8625E.
 
 
 Location Mapping Table (of IT8720F):

@@ -30,9 +30,19 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ## Compatibility
 
-- AS6204T
-- AS6104T (NOT TESTED!)
 - AS604T
+- AS6104T (NOT TESTED!)
+- AS6204T
+- AS6602T, AS6604T (NOT TESTED!)
+- AS6702T, AS6704T
+- AS5402T, AS5404T
+- .. possibly more, if they're similar enough.
+  The following DMI system-manufacturer / system-product-name combinations are currently supported
+  (see `sudo dmidecode -s system-manufacturer` and `sudo dmidecode -s system-product-name`):
+    - "ASUSTOR Inc." / "AS-6xxT"
+    - "Insyde" / "AS61xx"
+    - "Insyde" / "GeminiLake"
+    - "Intel Corporation" / "Jasper Lake Client Platform"
 
 ## Features
 
@@ -53,25 +63,33 @@ sudo make install
 
 ## Tips
 
-### Control blinking LEDs
+### Control blinking LEDs with `it87`
 
-*Note:* This is probably not supported on all devices, only ones that use the IT8625E chip.
-If your green status LED blinks while and after booting, you probably have a device that works..
+*Note:* This is probably not supported on all devices, only ones that use the IT8625E or IT8720F
+chips or similar.
 
-Stop that annoying blinking of the green status LED:
+Switch off that annoying blinking of the green status LED:
 ```
 echo 0 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink
 ```
 
 You can re-enable it with `echo 47 | sudo tee ...` because the status led is it87_gp**47**.
-Similarly, you can make other GPIO LEDs blink. Note that this can be done for two LEDs, as `gpled2_blink` also exists.
+In theory, you can make other GPIO LEDs blink by using their GP number instead of 47,
+but I couldn't get that to work.
+Note that this could even be done for two LEDs, as `gpled2_blink` also exists.
+
+If you want the green status LED to be constantly on (without blinking),
+the following should work, if `gpled1_blink` is still `47`:
+```
+echo 11 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
+```
 
 You can also configure the blinking frequency to one of 11 supported modes,
 for example, set mode 3 with:
 ```
 echo 3 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
 ```
-The following blinking frequency modes exist:
+The following blinking frequency modes exist on the IT8625:
 * **0** - 0.125s Off 0.125s On
 * **1** - 0.5s Off 0.5s On
 * **2** - 2s	Off	2s On
@@ -83,8 +101,15 @@ The following blinking frequency modes exist:
 * **8** - 0.5s Off 2s On
 * **9** - 1s Off 1s On
 * **10** - 4s Off 4s On
+* **11** - Always On
 
-_**TODO:** figure out how to make the status LED light up permanently_
+Other chips also support blinking control, but might support fewer modes.
+If blink frequency setting is supported at all, mode 11 (always on) *should* always work,
+and setting the other modes won't break anything, but might have differing frequencies than
+described above (and setting modes 8-10 will automatically set mode 0 instead).
+
+*Mode 11 for "always on" should always work, at least the bit set there was listed in
+all datasheets I checked (unfortunately, its function was never described in detail).*
 
 ### `it87` and PWM polarity
 
