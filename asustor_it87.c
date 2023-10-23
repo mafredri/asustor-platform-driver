@@ -381,6 +381,7 @@ struct it87_devices {
 #define FEAT_FOUR_TEMP		BIT(27)
 
 #define FEAT_BLINK_CTRL		BIT(28) /* control blinking of two GPIO LEDs */
+#define FEAT_BLINK_CTRL_ADV	BIT(29) /* additionally supports more blinking modes and breathing of LED1 */
 
 static const struct it87_devices it87_devices[] = {
 	[it87] = {
@@ -395,7 +396,7 @@ static const struct it87_devices it87_devices[] = {
 	[it8712] = {
 		.name = "it8712",
 		.model = "IT8712F",
-		.features = FEAT_OLD_AUTOPWM | FEAT_VID | FEAT_FANCTL_ONOFF,
+		.features = FEAT_OLD_AUTOPWM | FEAT_VID | FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		/* may need to overwrite */
 		.num_temp_limit = 3,
 		.num_temp_offset = 0,
@@ -452,7 +453,7 @@ static const struct it87_devices it87_devices[] = {
 		.features = FEAT_NEWER_AUTOPWM | FEAT_12MV_ADC | FEAT_16BIT_FANS
 			| FEAT_TEMP_PECI | FEAT_FIVE_FANS
 			| FEAT_IN7_INTERNAL | FEAT_PWM_FREQ2 | FEAT_SCALING
-			| FEAT_FANCTL_ONOFF,
+			| FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		.num_temp_limit = 6,
 		.num_temp_offset = 3,
 		.num_temp_map = 3,
@@ -518,7 +519,7 @@ static const struct it87_devices it87_devices[] = {
 		.model = "IT8772E",
 		.features = FEAT_NEWER_AUTOPWM | FEAT_12MV_ADC | FEAT_16BIT_FANS
 			| FEAT_TEMP_PECI | FEAT_IN7_INTERNAL
-			| FEAT_PWM_FREQ2 | FEAT_SCALING | FEAT_FANCTL_ONOFF,
+			| FEAT_PWM_FREQ2 | FEAT_SCALING | FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		/* PECI (coreboot) */
 		/* 12mV ADC (HWSensors4, OHM) */
 		/* 16 bit fans (HWSensors4, OHM) */
@@ -533,7 +534,7 @@ static const struct it87_devices it87_devices[] = {
 		.model = "IT8781F",
 		.features = FEAT_16BIT_FANS
 			| FEAT_TEMP_OLD_PECI | FEAT_FAN16_CONFIG | FEAT_PWM_FREQ2
-			| FEAT_FANCTL_ONOFF,
+			| FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		.num_temp_limit = 3,
 		.num_temp_offset = 3,
 		.num_temp_map = 3,
@@ -544,7 +545,7 @@ static const struct it87_devices it87_devices[] = {
 		.model = "IT8782F",
 		.features = FEAT_16BIT_FANS
 			| FEAT_TEMP_OLD_PECI | FEAT_FAN16_CONFIG | FEAT_PWM_FREQ2
-			| FEAT_FANCTL_ONOFF,
+			| FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		.num_temp_limit = 3,
 		.num_temp_offset = 3,
 		.num_temp_map = 3,
@@ -555,7 +556,7 @@ static const struct it87_devices it87_devices[] = {
 		.model = "IT8783E/F",
 		.features = FEAT_16BIT_FANS
 			| FEAT_TEMP_OLD_PECI | FEAT_FAN16_CONFIG | FEAT_PWM_FREQ2
-			| FEAT_FANCTL_ONOFF,
+			| FEAT_FANCTL_ONOFF | FEAT_BLINK_CTRL,
 		.num_temp_limit = 3,
 		.num_temp_offset = 3,
 		.num_temp_map = 3,
@@ -672,7 +673,7 @@ static const struct it87_devices it87_devices[] = {
 		.features = FEAT_NEWER_AUTOPWM | FEAT_16BIT_FANS
 			| FEAT_AVCC3 | FEAT_NEW_TEMPMAP
 			| FEAT_11MV_ADC | FEAT_IN7_INTERNAL | FEAT_SIX_FANS
-			| FEAT_SIX_PWM | FEAT_BANK_SEL | FEAT_SCALING | FEAT_BLINK_CTRL,
+			| FEAT_SIX_PWM | FEAT_BANK_SEL | FEAT_SCALING | FEAT_BLINK_CTRL | FEAT_BLINK_CTRL_ADV,
 		.num_temp_limit = 6,
 		.num_temp_offset = 6,
 		.num_temp_map = 6,
@@ -2651,16 +2652,44 @@ static SENSOR_DEVICE_ATTR(in8_label, S_IRUGO, show_label, NULL, 2);
 static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
 
-/* #### IT8625 GP LED blinking control #### */
+/* #### GP LED blinking control #### */
 
-// Documentation:
-// IT8625E programming example, in Chinese: https://icode.best/i/96302341329066
-// Translation: https://icode-best.translate.goog/i/96302341329066?_x_tr_sl=zh-CN&_x_tr_tl=en
-// not quite the same chip, but a bit helpful anyway: http://www.datasheet39.com/PDF/739483/IT8720F-datasheet.html
-// also, the table below and the commented out macros above are from asustors GPL kernel code
-// (that seems to be incomplete, which wouldn't really be GPL-compliant..)
-// from https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
-// and of course see also research/LED-Blinking.txt
+/* Documentation:
+ * IT8625E programming example, in Chinese: https://icode.best/i/96302341329066
+ * Translation: https://icode-best.translate.goog/i/96302341329066?_x_tr_sl=zh-CN&_x_tr_tl=en
+ * not quite the same chip, but a bit helpful anyway: http://www.datasheet39.com/PDF/739483/IT8720F-datasheet.html
+ * also, the table below and the commented out macros above are from asustors GPL kernel code
+ * (that seems to be incomplete, which wouldn't really be GPL-compliant..)
+ * from https://sourceforge.net/projects/asgpl/files/ADM4.1.0/4.1.0.RLQ1_and_above/
+ * and of course see also research/LED-Blinking.txt
+ *
+ * In short, for IT8625E:
+ * Pin mapping register bits (index 0xF9 for gpled1, 0xFA for gpled2):
+ *  0-5 GP LED location (from GPLED_TO_LOCATION() macro below; use 47 for it87_gp47)
+ *  6   Reserved
+ *  7   SMBus isolation; Default 0 (Bypass, AVCC3 on); 1: Isolation (AVCC3 off)
+ *      (On some other chips like IT8720F this is "Reserved" - probably just don't change this bit)
+ *
+ * Blinking control register bits (index 0xF9 for gpled1, 0xFB for gpled2):
+ *  0   "GP LED blinking X output low enable" - if this bit is set, the LED seems to be always on
+ *  1-3 frequency selection, see table below
+ *  4   "LED blinking X pin mapping register clear" - unsure what this is exactly, maybe set to 1
+ *      if the power switch has been pressed for 4 seconds or something
+ *      ("enabled when PANSWH# is low for over 4 seconds")
+ *  5   LED blinking short low pulse enable - seems to make the "on" cycles shorter
+ *  6-7 frequency selection, see table below
+ *
+ * On IT8720F (and in fact all chips I found docs for, except IT8625E),
+ * the blinking control register is slightly different, but (probably?)
+ * mostly compatible (for modes 1-7 and 11):
+ *  0   "GP LED blinking X output low enable", same as IT8625E
+ *  1-2 frequency control (0: 4Hz, 1: 1Hz, 2: 0.25Hz, 3: 0.125Hz)
+ *  3   LED blinking short low pulse enable - seems to make the "on" cycles shorter
+ *  4-7 Reserved
+ *
+ * For IT8625 (and others supporting the additional blinking modes in bits 6-7
+ *  and maybe even breathe), FEAT_BLINK_CTRL_ADV is set, for IT8720F and the rest not.
+ */
 
 #define GPLED_TO_LOCATION(GP_LED) \
 	({ (((GP_LED) / 10) << 3) + ((GP_LED) % 10); })
@@ -2669,59 +2698,48 @@ static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 
 static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
 
+/* read a byte from given GPIO register, returns negative value (-EASDF) on error */
 static int read_gpio_reg(struct it87_data *data, int reg)
 {
 	int sioaddr = data->sioaddr;
 	int err, ret;
 
-	it87_lock(data); // TODO: check error; and is this even necessary?
 	err = superio_enter(sioaddr);
 	if (err) {
-		it87_unlock(data); // TODO: needed?
 		return err;
 	}
 
 	superio_select(sioaddr, GPIO);
 	ret = superio_inb(sioaddr, reg);
+
 	superio_exit(sioaddr, data->doexit);
-
-	it87_unlock(data); // TODO: needed?
-
 	return ret;
 }
 
 
-// update the (u8) value in a GPIO reg, by reading the old value and keeping old_val & bits_to_keep
-// (setting the register to val | (old_val & bits_to_keep))
-// assumes that (val & bits_to_keep) == 0;
-// set bits_to_keep to 0 for a simple write that replaces the whole value in the register
+/* update the (u8) value in a GPIO reg, by reading the old value and keeping old_val & bits_to_keep
+ * (setting the register to val | (old_val & bits_to_keep))
+ * assumes that (val & bits_to_keep) == 0;
+ * set bits_to_keep to 0 for a simple write that replaces the whole value in the register */
 static int update_gpio_reg(struct it87_data *data, int reg, int val, int bits_to_keep)
 {
 	int sioaddr = data->sioaddr;
 	int err;
 
-	// TODO: should this use the spinlock of asustor_gpio_it87.c's &it87_gpio->lock ?
-	//       or maybe use the it87_gpio_get() functions etc that are exported by that module?
-	it87_lock(data); // TODO: check error; and is this even necessary?
-
 	err = superio_enter(sioaddr);
 	if (err) {
-		it87_unlock(data); // TODO: needed?
 		return err;
 	}
 
 	superio_select(sioaddr, GPIO);
 	if(bits_to_keep != 0) {
 		int old_val = superio_inb(sioaddr, reg);
-		// val &= ~bits_to_keep;
+		/* val &= ~bits_to_keep; */
 		val |= (old_val & bits_to_keep);
 	}
 	superio_outb(sioaddr, reg, val);
 
 	superio_exit(sioaddr, data->doexit);
-
-	it87_unlock(data); // TODO: needed?
-
 	return 0;
 }
 
@@ -2731,16 +2749,20 @@ static ssize_t show_gpled_blink(struct device *dev, struct device_attribute *att
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
 	struct it87_data *data = dev_get_drvdata(dev);
 	int led_map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
-	int gpled, smbus_isolation;
+	int gpled;
 
 	int reg_val = read_gpio_reg(data, led_map_reg);
 	if(reg_val < 0)
 		return reg_val;
 
 	gpled = LOCATION_TO_GPLED(reg_val & 63);
-	smbus_isolation = (reg_val & 128) != 0;
 
+#if 0 /* useful for debugging */
+	int smbus_isolation = (reg_val & 128) != 0;
 	return sprintf(buf, "0x%X gpled %d smbusIso %d\n", reg_val, gpled, smbus_isolation);
+#else
+	return sprintf(buf, "%d\n", gpled);
+#endif
 }
 
 static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr,
@@ -2774,39 +2796,53 @@ static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr
 	1             00           001:         1Hz,     50% Duty         0.5s   OFF  0.5s   ON
 	2             00           010:         0.25Hz,  50% Duty         2s     OFF  2s     ON
 	3             00           011:         2Hz,     50% Duty         0.25s  OFF  0.25s  ON
+	// on IT8720F and most others, the following might be different, but generally
+	// *something* like this is supported, as bit 3 is "LED blinking short low pulse enable" there
 	4             00           100:         0.25Hz,  25% Duty         1s     OFF  3s     ON
 	5             00           101:         0.25Hz,  75% Duty         3s     OFF  1s     ON
 	6             00           110:         0.125Hz, 25% Duty         2s     OFF  6s     ON
 	7             00           111:         0.125Hz  75% Duty         6s     OFF  2s     ON
+	// advanced modes:
 	8             01           XXX          0.4Hz,   20% Duty         0.5s   OFF  2s     ON
 	9             10           XXX          0.5 Hz,  50% Duty         1S     OFF  1S     ON
 	10            11           XXX          0.125Hz, 50% Duty         4S     OFF  4S     ON
+	// custom mode not mentioned in original asustor source:
+	11            XX           XXX  but also set bit [0]: 0% Duty      Always ON
 */
 
-// sets (only!) bits 1-3 and 6-7 for the blinking control registers frequency selection
-// depending on the mode index (0-10, see table above or blink_freq_desc[])
-// returns -1 on error (invalid mode)
-static int blink_mode_to_regvals(int mode)
+/* sets (only!) bits 0-3 and 6-7 for the blinking control registers frequency selection
+ * depending on the mode index (0-10, see table above or blink_freq_desc[])
+ * returns -1 on error (invalid mode) */
+static int blink_mode_to_regvals(int mode, bool advanced)
 {
-	if(mode < 0 || mode > 10)
+	if(mode < 0 || mode > 11)
 		return -1;
+	if(mode == 11)
+		/* only set bit 0 "GP LED Blinking 1 Output Low Enable"
+		   which apparently means "always on", regardless of bits 3:1 and 7:6
+		   (so leave them at 0) */
+		return BIT(0);
 	if(mode < 8)
 		return mode << 1;
-	// else: modes 8-10
-	mode -= 7; // 8 => 0b01, 9 => 0b10, 10 => 0b11
-	return mode << 6;
+	/* else: modes 8-10 */
+	mode -= 7; /* 8 => 0b01, 9 => 0b10, 10 => 0b11 */
+	// for non-advanced, just set mode 0 if mode 8-10 was requested
+	return advanced ? (mode <<  6) : 0;
 }
 
-// returns blink freq mode index based on bits 1-3 and 6-7 of regvals from blinking control register
-static u8 regvals_to_blink_mode(u8 regvals)
+/* returns blink freq mode index based on bits 0-3 and 6-7 of regvals from blinking control register */
+static int regvals_to_blink_mode(int regvals, bool advanced)
 {
-	u8 ret;
-	u8 bits67 = regvals & (BIT(6) | BIT(7));
-	if(bits67 == 0) { // bits 6 and 7 not set => return bits 1 to 3
+	int ret, bits67;
+	if(regvals & BIT(0)) /* special case: the "always on" mode */
+		return 11;
+	/* only the advanced case (FEAT_BLINK_CTRL_ADV) has freq mode info in bits 6 and 7 */
+	bits67 = advanced ? (regvals & (BIT(6) | BIT(7))) : 0;
+	if(bits67 == 0) { /* bits 6 and 7 not set => return bits 1 to 3 */
 		ret = (regvals >> 1) & 7;
 	} else {
 		ret = bits67 >> 6;
-		ret += 7; // 0b01 => 8 etc
+		ret += 7; /* 0b01 => 8 etc */
 	}
 	return ret;
 }
@@ -2815,13 +2851,14 @@ static const u8 IT87_REG_GP_LED_CTRL_FREQ[] = {0xf9, 0xfb};
 
 const char * blink_freq_desc[] = {
     "0.125s	OFF	0.125s ON", "0.5s OFF 0.5s ON", "2s	OFF	2s ON", "0.25s OFF 0.25s ON", "1s OFF 3s ON", "3s OFF 1s ON",
-    "2s	OFF	6s ON", "6s	OFF	2s ON", "0.5s OFF 2s ON", "1S OFF 1S ON", "4S OFF 4S ON"
+    "2s	OFF	6s ON", "6s	OFF	2s ON", "0.5s OFF 2s ON", "1s OFF 1s ON", "4s OFF 4s ON", "ALWAYS ON"
 };
 
 static ssize_t show_gpled_blink_freq(struct device * dev, struct device_attribute *attr, char *buf)
 {
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
 	struct it87_data *data = dev_get_drvdata(dev);
+	bool advanced = (data->features & FEAT_BLINK_CTRL_ADV) != 0;
 
 	u8 led_ctrl_reg = IT87_REG_GP_LED_CTRL_FREQ[sattr->index];
 
@@ -2829,15 +2866,18 @@ static ssize_t show_gpled_blink_freq(struct device * dev, struct device_attribut
 	if(blink_reg_val < 0) {
 		return blink_reg_val;
 	} else {
-		int mode = regvals_to_blink_mode(blink_reg_val);
+		int mode = regvals_to_blink_mode(blink_reg_val, advanced);
 
+#if 0 /* useful for debugging */
 		int short_pulse = (blink_reg_val & BIT(5)) != 0;
 		int pin_map_reg_clear = (blink_reg_val & BIT(4)) != 0;
 		int blink_out_low_enab = blink_reg_val & BIT(0);
 
 		return sprintf(buf, "0x%X %d (%s) sp %d pmrc %d bole %d\n", blink_reg_val, mode,
 					   blink_freq_desc[mode], short_pulse, pin_map_reg_clear, blink_out_low_enab);
-		//return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+#else
+		return sprintf(buf, "%d (%s)\n", mode, blink_freq_desc[mode]);
+#endif
 	}
 }
 
@@ -2849,14 +2889,20 @@ static ssize_t set_gpled_blink_freq(struct device *dev, struct device_attribute 
 	u8 led_ctrl_reg = IT87_REG_GP_LED_CTRL_FREQ[sattr->index];
 	int err, blink_reg_val;
 	long val;
+	bool advanced = (data->features & FEAT_BLINK_CTRL_ADV) != 0;
+	int keep_bits = BIT(5) | BIT(4);
+	if(!advanced) /* those bits are reserved on most chips */
+		keep_bits |= (BIT(6) | BIT(7));
 
-	if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 10)
+	if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 11)
 		return -EINVAL;
+	/* TODO: could support negative values for "set BIT(5) aka "Short Low Pulse Enable"
+	   which seems to shorten the ON times, but that wouldn't work for index 0 of course */
 
-	blink_reg_val = blink_mode_to_regvals(val);
+	blink_reg_val = blink_mode_to_regvals(val, advanced);
 
 	/* keep only the bits of the register that aren't part of the frequency mode */
-	err = update_gpio_reg(data, led_ctrl_reg, blink_reg_val, BIT(5) | BIT(4) | BIT(0));
+	err = update_gpio_reg(data, led_ctrl_reg, blink_reg_val, keep_bits);
 	if(err)
 		return err;
 
@@ -3320,10 +3366,13 @@ static struct attribute *it87_attributes_gp_led_blink[] = {
 
 static umode_t it87_gpled_blink_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 {
+#if 0
+    // DG: no idea what this is about exactly, was already commented out in asustor code
     // struct device *dev = container_of(kobj, struct device, kobj);
     // struct it87_data *data = dev_get_drvdata(dev);
     // int i = index / 7; /* temperature index */
     // int a = index % 7; /* attribute index */
+#endif
 
     return attr->mode;
 }
@@ -3883,8 +3932,6 @@ static int __init it87_find(int sioaddr, unsigned short *address,
 			 */
 			if (!(reg26 & BIT(4)))
 				sio_data->skip_fan |= BIT(4);
-
-			// TODO: sth about blinking?
 		}
 
 		/* Check for pwm6, fan6 */
@@ -4244,9 +4291,9 @@ static int it87_check_pwm(struct device *dev)
 	 * allowing the fan to be used as-is.
 	 *
 	 * NOTE(mafredri): Should we do additional checks to verify?
+	 *
+	 * TODO: is the fix_pwm_polarity hack relevant at all? would be here..
 	 */
-
-    // TODO: is the fix_pwm_polarity hack relevant at all? would be here..
 
 	return 1;
 }
