@@ -9,6 +9,7 @@
 
 #include <linux/dmi.h>
 #include <linux/errno.h>
+#include <linux/gpio/driver.h>
 #include <linux/gpio/machine.h>
 #include <linux/gpio_keys.h>
 #include <linux/input.h>
@@ -21,9 +22,6 @@
 #define GPIO_IT87 "asustor_gpio_it87" // use custom patched version for IT8625 support
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
-
-#define AS6100_GPIO_IT87_BASE 161 // same for AS6700
-#define AS600_GPIO_IT87_BASE 448
 
 // ASUSTOR Leds.
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
@@ -214,7 +212,7 @@ static struct gpio_keys_platform_data asustor_keys_pdata = {
 };
 
 // clang-format off
-static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = { // XXX: same for 6700
+static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = { // same for 6700
 	.dev_id = "gpio-keys-polled",
 	.table = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 20, NULL, 0, GPIO_ACTIVE_LOW),
@@ -235,25 +233,21 @@ static struct gpiod_lookup_table asustor_600_gpio_keys_lookup = {
 
 // ASUSTOR Platform.
 struct asustor_driver_data {
-	int gpio_base;
 	struct gpiod_lookup_table *leds;
 	struct gpiod_lookup_table *keys;
 };
 
 static struct asustor_driver_data asustor_6700_driver_data = {
-	.gpio_base = AS6100_GPIO_IT87_BASE,
 	.leds	   = &asustor_6700_gpio_leds_lookup,
 	.keys	   = &asustor_6100_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_6100_driver_data = {
-	.gpio_base = AS6100_GPIO_IT87_BASE,
 	.leds	   = &asustor_6100_gpio_leds_lookup,
 	.keys	   = &asustor_6100_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_600_driver_data = {
-	.gpio_base = AS600_GPIO_IT87_BASE,
 	.leds	   = &asustor_600_gpio_leds_lookup,
 	.keys	   = &asustor_600_gpio_keys_lookup,
 };
@@ -312,6 +306,18 @@ static struct platform_device *__init asustor_create_pdev(const char *name,
 	return pdev;
 }
 
+static int gpiochip_match_name(struct gpio_chip *chip, void *data)
+{
+	const char *name = data;
+
+	return !strcmp(chip->label, name);
+}
+
+static struct gpio_chip *find_chip_by_name(const char *name)
+{
+	return gpiochip_find((void *)name, gpiochip_match_name);
+}
+
 // TODO(mafredri): Allow force model for testing.
 static int __init asustor_init(void)
 {
@@ -333,14 +339,17 @@ static int __init asustor_init(void)
 	gpiod_add_lookup_table(driver_data->keys);
 
 	for (i = 0; i < ARRAY_SIZE(asustor_gpio_keys_table); i++) {
-		// TODO(mafredri): Use gpiod or something less hacky.
 		// This is here simply because gpio-keys-polled does
 		// not support gpio lookups.
 		keys_table = driver_data->keys->table;
 		for (; keys_table->key != NULL; keys_table++) {
 			if (i == keys_table->idx) {
+				// add the GPIO chip's base, so we get the absolute (global) gpio number
+				struct gpio_chip* chip = find_chip_by_name( keys_table->key );
+				if(chip == NULL)
+					continue;
 				asustor_gpio_keys_table[i].gpio =
-					driver_data->gpio_base +
+					chip->base +
 					keys_table->chip_hwnum;
 			}
 		}
