@@ -114,6 +114,7 @@ static struct gpio_led as6700_leds[] = {
 	{ .name = "red:status", .default_state = LEDS_GPIO_DEFSTATE_ON },
 	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },
 	{ .name = "lcd_power", .default_state = LEDS_GPIO_DEFSTATE_ON },
+	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // TODO: set default_trigger to sth network-related?
 	{
 		.name		 = "sata1:red:disk",
 		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
@@ -170,14 +171,15 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_HIGH),	//red status led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 4, GPIO_ACTIVE_LOW),	//green usb led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 5, GPIO_ACTIVE_HIGH),	//LCD power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 6, GPIO_ACTIVE_LOW),	//sata1 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 7, GPIO_ACTIVE_LOW),	//sata2 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 8, GPIO_ACTIVE_LOW),	//sata3 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 9, GPIO_ACTIVE_LOW),	//sata4 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 10, GPIO_ACTIVE_LOW),	//sata1 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_LOW),	//sata2 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 12, GPIO_ACTIVE_LOW),	//sata3 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_LOW),	//sata4 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL, 6, GPIO_ACTIVE_LOW),	//blue LAN
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 7, GPIO_ACTIVE_LOW),	//sata1 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 8, GPIO_ACTIVE_LOW),	//sata2 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 9, GPIO_ACTIVE_LOW),	//sata3 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 10, GPIO_ACTIVE_LOW),	//sata4 red led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 11, GPIO_ACTIVE_LOW),	//sata1 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 12, GPIO_ACTIVE_LOW),	//sata2 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 13, GPIO_ACTIVE_LOW),	//sata3 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 14, GPIO_ACTIVE_LOW),	//sata4 green led
 		{}
 	},
 };
