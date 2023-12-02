@@ -117,18 +117,18 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 	.table = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),	//blue power led
 		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL, 1, GPIO_ACTIVE_LOW),	//red power led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),	//green status led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_HIGH),	//red status led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_HIGH),	//green status led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_LOW),	//red status led
 		// TODO: is there a blue USB LED in these devices?
 		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),	//green usb led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL, 6, GPIO_ACTIVE_HIGH),	//blue LAN
-		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 7, GPIO_ACTIVE_LOW),	//sata1 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 7, GPIO_ACTIVE_HIGH),	//sata1 green led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 8, GPIO_ACTIVE_LOW),	//sata1 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 9, GPIO_ACTIVE_LOW),	//sata2 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 9, GPIO_ACTIVE_HIGH),	//sata2 green led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 10, GPIO_ACTIVE_LOW),	//sata2 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 11, GPIO_ACTIVE_LOW),	//sata3 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 11, GPIO_ACTIVE_HIGH),	//sata3 green led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 12, GPIO_ACTIVE_LOW),	//sata3 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_LOW),	//sata4 green led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_HIGH),	//sata4 green led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 14, GPIO_ACTIVE_LOW),	//sata4 red led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH),	//LCD power
 		// sata5 green: 61, sata5 red: 62 (probably)
