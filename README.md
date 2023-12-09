@@ -8,7 +8,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ## Dependencies
 
-**Note:** All other dependencies used by these modules are part of the mainline linux kernel, if they're not included by your distribution you may need to compile them yourself.
+**Note:** The following dependencies from the mainline linux kernel are required, if they're not included by your distribution you may need to compile them yourself (note that some modules are only required on specific ASUSTOR models):
 
 - `gpio-ich` (AS6)
 - `hwmon-vid` (for the contained `asustor-it87` module)
@@ -18,9 +18,9 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX)
   - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
     and supports more variants of IT86XX and the IT87XX chips than the kernels `it87` driver.
-    Furthermore it supports controlling blinking of up to two LEDs.
+    Support for timer-based blinking of up to two LEDs (only works on some models) has also been added.
   - Also includes a patched version of `gpio-it87` called `asustor-gpio-it87`. The only change is supporting
-    the IT8625E chip that is used in several newer asustor devices.
+    the IT8625E chip that is used in several newer ASUSTOR devices.
   - May require adding `acpi_enforce_resources=lax` to kernel boot arguments for full functionality
   - Temperature monitoring (`lm-sensors`)
   - Fan speed regulation via `pwm1`
