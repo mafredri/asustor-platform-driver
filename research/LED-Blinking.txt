@@ -98,7 +98,7 @@ FBh is the "GP LED Blinking Control and RING# Pin Mapping Register"
 * 2-1 GP LED 1 frequency control (0: 4Hz, 1: 1Hz, 2: 0.25Hz, 3: 0.125Hz)
 * 0   GP LED 1 Output low enabled
 
-GPIO LED Location Mapping:
+GPIO LED Location Mapping of IT8673F:
  001 000  -  GPIO10 (pin 66)
  001 001  -  GPIO11 (pin 90). Powered by VCCH
  001 010  -  GPIO12 (pin 73)
@@ -170,17 +170,18 @@ Location Mapping Table (of IT8720F):
 	100 010 (0x22 = 34)   GP42 (pin 76). Powered by VCCH.
 	100 011 (0x23 = 35)   GP43 (pin 75). Powered by VCCH.
 	100 100 (0x24 = 36)   GP44 (pin 72). Powered by VCCH.
-	// XXX: what about 100 101 (37) and GP45 ?
+	// XXX: what about 100 101 (37) and GP45 ? (not documented for IT8720F)
+	// at least on IT8722F it's: 100 101 (0x25 = 37) GP45 (pin 71) Powered by VCCH.
 	100 110 (0x26 = 38)   GP46 (pin 70). Powered by VCCH.
 	100 111 (0x27 = 39)   GP47 (pin 66).
 
-	101 000 (0x27 = 39)   GP50 (pin 48).
-	101 001 (0x28 = 41)   GP51 (pin 10).
-	101 010 (0x29 = 42)   GP52 (pin 9).
-	101 011 (0x2A = 43)   GP53 (pin 77). Powered by VCCH.
-	101 100 (0x2B = 44)   GP54 (pin 73). Powered by VCCH.
-	101 101 (0x2C = 45)   GP55 (pin 85). Powered by VCCH.
-	101 110 (0x2D = 46)   GP56 (pin 83). Powered by VCCH.
-	101 111 (0x2E = 47)   GP57 (pin 82). Powered by VCCH.
+	101 000 (0x28 = 40)   GP50 (pin 48).
+	101 001 (0x29 = 41)   GP51 (pin 10).
+	101 010 (0x2A = 42)   GP52 (pin 9).
+	101 011 (0x2B = 43)   GP53 (pin 77). Powered by VCCH.
+	101 100 (0x2C = 44)   GP54 (pin 73). Powered by VCCH.
+	101 101 (0x2D = 45)   GP55 (pin 85). Powered by VCCH.
+	101 110 (0x2E = 46)   GP56 (pin 83). Powered by VCCH.
+	101 111 (0x2F = 47)   GP57 (pin 82). Powered by VCCH.
 	 Else                 Reserved
 
