@@ -19,7 +19,8 @@
 #include <linux/platform_device.h>
 
 //#define GPIO_IT87 "gpio_it87"
-#define GPIO_IT87 "asustor_gpio_it87" // use custom patched version for IT8625 support
+#define GPIO_IT87                                                              \
+	"asustor_gpio_it87" // use custom patched version for IT8625 support
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
 
@@ -27,46 +28,48 @@
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
 // https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/
 static struct gpio_led asustor_leds[] = {
-	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON },   // 0
-	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF },   // 1
+	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 0
+	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 1
 	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 2
 	{
-		.name		 = "red:status",                                    // 3
+		.name		 = "red:status", // 3
 		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
 		.panic_indicator = 1,
 		.default_trigger = "panic",
 	},
-	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },    // 4
+	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 4
+	{ .name		 = "green:usb", // 5
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF },
+	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 6
 	{
-		.name = "green:usb",                                            // 5
-		.default_state = LEDS_GPIO_DEFSTATE_OFF
-	},
-	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON },     // 6
-	{
-		.name		 = "sata1:green:disk",                              // 7
+		.name		 = "sata1:green:disk", // 7
 		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name = "sata1:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 8
+	{ .name		 = "sata1:red:disk",
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 8
 	{
-		.name		 = "sata2:green:disk",                                 // 9
+		.name		 = "sata2:green:disk", // 9
 		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name = "sata2:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 10
+	{ .name		 = "sata2:red:disk",
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 10
 	{
-		.name		 = "sata3:green:disk",                                 // 11
+		.name		 = "sata3:green:disk", // 11
 		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name = "sata3:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 12
+	{ .name		 = "sata3:red:disk",
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 12
 	{
-		.name		 = "sata4:green:disk",                                 // 13
+		.name		 = "sata4:green:disk", // 13
 		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name = "sata4:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 14
-	{ .name = "lcd_power", .default_state = LEDS_GPIO_DEFSTATE_ON },       // 15
+	{ .name		 = "sata4:red:disk",
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 14
+	{ .name = "lcd_power", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 15
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -136,7 +139,6 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 	},
 };
 
-
 // clang-format on
 
 // ASUSTOR Buttons.
@@ -192,18 +194,18 @@ struct asustor_driver_data {
 };
 
 static struct asustor_driver_data asustor_6700_driver_data = {
-	.leds	   = &asustor_6700_gpio_leds_lookup,
-	.keys	   = &asustor_6100_gpio_keys_lookup,
+	.leds = &asustor_6700_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_6100_driver_data = {
-	.leds	   = &asustor_6100_gpio_leds_lookup,
-	.keys	   = &asustor_6100_gpio_keys_lookup,
+	.leds = &asustor_6100_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_600_driver_data = {
-	.leds	   = &asustor_600_gpio_leds_lookup,
-	.keys	   = &asustor_600_gpio_keys_lookup,
+	.leds = &asustor_600_gpio_leds_lookup,
+	.keys = &asustor_600_gpio_keys_lookup,
 };
 
 static const struct dmi_system_id asustor_systems[] = {
@@ -299,19 +301,19 @@ static int __init asustor_init(void)
 		for (; keys_table->key != NULL; keys_table++) {
 			if (i == keys_table->idx) {
 				// add the GPIO chip's base, so we get the absolute (global) gpio number
-				struct gpio_chip* chip = find_chip_by_name( keys_table->key );
-				if(chip == NULL)
+				struct gpio_chip *chip =
+					find_chip_by_name(keys_table->key);
+				if (chip == NULL)
 					continue;
 				asustor_gpio_keys_table[i].gpio =
-					chip->base +
-					keys_table->chip_hwnum;
+					chip->base + keys_table->chip_hwnum;
 			}
 		}
 	}
 
 	// TODO(mafredri): Handle number of disk slots -> enabled LEDs.
 	asustor_leds_pdev = asustor_create_pdev(
-			"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
+		"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
 	if (IS_ERR(asustor_leds_pdev)) {
 		ret = PTR_ERR(asustor_leds_pdev);
 		goto err;
