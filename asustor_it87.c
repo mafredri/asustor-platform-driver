@@ -3407,13 +3407,11 @@ static struct attribute *it87_attributes_gp_led_blink[] = {
 
 static umode_t it87_gpled_blink_is_visible(struct kobject *kobj, struct attribute *attr, int index)
 {
-#if 0
     // DG: no idea what this is about exactly, was already commented out in asustor code
     // struct device *dev = container_of(kobj, struct device, kobj);
     // struct it87_data *data = dev_get_drvdata(dev);
     // int i = index / 7; /* temperature index */
     // int a = index % 7; /* attribute index */
-#endif
 
     return attr->mode;
 }
@@ -4753,11 +4751,6 @@ static void __exit sm_it87_exit(void)
 
 MODULE_AUTHOR("Chris Gauthron, Jean Delvare <jdelvare@suse.de>");
 MODULE_DESCRIPTION("IT8705F/IT871xF/IT872xF hardware monitoring driver");
-//module_param(update_vbat, bool, 0000);
-//MODULE_PARM_DESC(update_vbat, "Update vbat if set else return powerup value");
-//module_param(fix_pwm_polarity, bool, 0000);
-//MODULE_PARM_DESC(fix_pwm_polarity,
-//                 "Force PWM polarity to active high (DANGEROUS)");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(IT87_DRIVER_VERSION);
 

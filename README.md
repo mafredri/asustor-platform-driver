@@ -115,6 +115,21 @@ described above (and setting modes 8-10 will automatically set mode 0 instead).
 *Mode 11 for "always on" should always work, at least the bit set there was listed in
 all datasheets I checked (unfortunately, its function was never described in detail).*
 
+### Set triggers for LEDs
+
+Linux allows controlling LEDs with "triggers", which means that they will blink on specific events.
+By default, the trigger is "none" (which means "always on") for most LEDs, but there are others that
+you may enable (likely in a script that's run after boot), for example:
+```
+# make green USB LED blink on USB traffic
+echo usb-host > /sys/class/leds/green\:usb/trigger
+# make LAN led light up if the first network link is up:
+echo r8169-0-200:00:link > /sys/class/leds/blue\:lan
+```
+
+`cat /sys/class/leds/green\:usb/trigger` will list the available triggers, with the currently used
+one being marked with square brackes (e.g. `[none]  kbd-scrolllock kbd-numlock kbd-capslock ...`).
+
 ### `it87` and PWM polarity
 
 This project includes a patched version of the `it87` module (`asustor-it87`) that is part of mainline kernel. It skips PWM sanity checks for the fan because ASUSTOR firmware correctly initializes fans in active low polarity and can be used straight with `fancontrol` or similar tools.

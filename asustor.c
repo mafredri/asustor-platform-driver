@@ -39,8 +39,7 @@ static struct gpio_led asustor_leds[] = {
 	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },    // 4
 	{
 		.name = "green:usb",                                            // 5
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-		.default_trigger = "usb-host"
+		.default_state = LEDS_GPIO_DEFSTATE_OFF
 	},
 	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON },     // 6
 	{
