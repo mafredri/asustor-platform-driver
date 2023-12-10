@@ -70,13 +70,33 @@ mostly compatible (for modes 1-7 and 11):
 * 3   LED blinking short low pulse enable - seems to make the "on" cycles shorter
 * 4-7 Reserved
 
+Apart from the blink configuration mentioned so far, each GPIO Pin must be switched to
+"alternate function" mode so setting the pin mapping register to it does anything
+(=> so it can use this blinking feature), and to "Simple I/O function" mode so the GPIO/LED
+can be controlled by the user.
+For each GPIO pin up to GP57 there's a bit in an "enable register" for this.
+That bit being 0 means "alternate mode", 1 means "Simple I/O function" mode.
+The GPIO sets (or Super I/O sets) 1, 2, 3, 4, 5 use the enable registers C0h, C1h, C2h, C3h, C4h.
+GPIO set 1 is GP10-GP17, GPIO set 2 is GP20-GP27, etc.
+So for pin/LED GPxy, the corresponding enable register is 0xC0 + x-1,
+and the enable bit within the register is y, i.e. value 1 << y.
+Examples:
+ GP14 => reg 0xC0, bit 4 (value 1 << 4 = 16)
+ GP30 => reg 0xC2, bit 0 (value 1 << 0 = 1)
+ GP47 => reg 0xC3, bit 7 (value 1 << 7 = 128)
+
 NOTE: It's quite possible (and probable) that more IT87xx chips behave like this,
 these are the ones I could find data sheets for.
+
 
 On IT8673F, it's quite different. Everything is still in the GPIO (LDN=07h) space,
 but the registers are very different (seems to be a rather old chip)..
 see also http://www.datasheet39.com/PDF/502101/IT8673F-datasheet.html
 I'm documenting this here for the sake of completeness, but will not implement it.
+
+F5h is the (only) register to switch a GPIO between "Simple I/O function" mode
+and "Alternate function" mode. Like with the other chips, a bit being 0 means "alternate function"
+and a bit being 1 means "Simple I/O". Bit number 0 is for GPIO10, bit number 7 (1<<7) is for GPIO17.
 
 F8h is the "Panel Button De-bounce Control Register/GP LED Blinking 2 Control Register":
 * 7   GP LED 2 short low pulse enable
@@ -138,6 +158,7 @@ in IT8625E.
 
 Location Mapping Table (of IT8720F):
 	Location        Description
+GPIO Set 1 (Simple I/O enable register 0xC0):
 	001 000 (0x08 =  8)   GP10 (pin 84). Powered by VCCH.
 	001 001 (0x09 =  9)   GP11 (pin 34).
 	001 010 (0x0A = 10)   GP12 (pin 33).
@@ -146,7 +167,7 @@ Location Mapping Table (of IT8720F):
 	001 101 (0x0D = 13)   GP15 (pin 3).
 	001 110 (0x0E = 14)   GP16 (pin 2).
 	001 111 (0x0F = 15)   GP17 (pin 28).
-
+GPIO Set 2 (Simple I/O enable register 0xC1):
 	010 000 (0x10 = 16)   GP20 (pin 27). Powered by VCCH.
 	010 001 (0x11 = 17)   GP21 (pin 26). Powered by VCCH.
 	010 010 (0x12 = 18)   GP22 (pin 25). Powered by VCCH.
@@ -155,7 +176,7 @@ Location Mapping Table (of IT8720F):
 	010 101 (0x15 = 21)   GP25 (pin 22). Powered by VCCH.
 	010 110 (0x16 = 22)   GP26 (pin 21). Powered by VCCH.
 	010 111 (0x17 = 23)   GP27 (pin 20). Powered by VCCH.
-
+GPIO Set 3 (Simple I/O enable register 0xC2):
 	011 000 (0x18 = 24)   GP30 (pin 19).
 	011 001 (0x19 = 25)   GP31 (pin 18).
 	011 010 (0x1A = 26)   GP32 (pin 17).
@@ -164,7 +185,7 @@ Location Mapping Table (of IT8720F):
 	011 101 (0x1D = 29)   GP35 (pin 13).
 	011 110 (0x1E = 30)   GP36 (pin 12).
 	011 111 (0x1F = 31)   GP37 (pin 11).
-
+GPIO Set 4 (Simple I/O enable register 0xC3):
 	100 000 (0x20 = 32)   GP40 (pin 79). Powered by VCCH.
 	100 001 (0x21 = 33)   GP41 (pin 78). Powered by VCCH.
 	100 010 (0x22 = 34)   GP42 (pin 76). Powered by VCCH.
@@ -174,7 +195,7 @@ Location Mapping Table (of IT8720F):
 	// at least on IT8722F it's: 100 101 (0x25 = 37) GP45 (pin 71) Powered by VCCH.
 	100 110 (0x26 = 38)   GP46 (pin 70). Powered by VCCH.
 	100 111 (0x27 = 39)   GP47 (pin 66).
-
+GPIO Set 5 (Simple I/O enable register 0xC4):
 	101 000 (0x28 = 40)   GP50 (pin 48).
 	101 001 (0x29 = 41)   GP51 (pin 10).
 	101 010 (0x2A = 42)   GP52 (pin 9).

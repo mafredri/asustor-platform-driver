@@ -74,14 +74,18 @@ echo 0 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink
 ```
 
 You can re-enable it with `echo 47 | sudo tee ...` because the status led is it87_gp**47**.
-In theory, you can make other GPIO LEDs blink by using their GP number instead of 47,
-but I couldn't get that to work.
+You can also make other GPIO LEDs blink by using their GP number instead of 47.
 Note that this could even be done for two LEDs, as `gpled2_blink` also exists.
 
 If you want the green status LED to be constantly on (without blinking),
 the following should work, if `gpled1_blink` is still `47`:
 ```
 echo 11 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
+```
+
+Or, if you set `gpled1_blink` to `0` (or to another LED), you can switch on the status LED with:
+```
+echo 1 | sudo tee /sys/class/leds/green\:status/brightness
 ```
 
 You can also configure the blinking frequency to one of 11 supported modes,

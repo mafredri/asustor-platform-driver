@@ -117,7 +117,7 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 	.table = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),	//blue power led
 		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL, 1, GPIO_ACTIVE_LOW),	//red power led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_HIGH),	//green status led
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),	//green status led
 		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_LOW),	//red status led
 		// TODO: is there a blue USB LED in these devices?
 		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),	//green usb led
