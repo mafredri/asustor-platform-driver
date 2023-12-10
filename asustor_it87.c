@@ -2807,7 +2807,7 @@ static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr
 	/* switch the old/current blinking LED pin back to the "Simple I/O function"
 	 * (instead of "alternate function") so it can be controlled normally again
 	 * Note: Bit being 0 means alternate function, 1 means Simple I/O */
-	oldloc = read_gpio_reg(data, led_map_reg);
+	oldloc = read_gpio_reg(data, led_map_reg) & ~(BIT(6) | BIT(7));
 	if(oldloc != 0) {
 		int oldgpled = LOCATION_TO_GPLED(oldloc);
 		int oldgpledbit = GPLED_TO_ALT_FN_SEL_BIT(oldgpled);
@@ -2937,7 +2937,7 @@ static ssize_t set_gpled_blink_freq(struct device *dev, struct device_attribute 
 
 	if (0 > kstrtol(buf, 10, &val) || val < 0 || val > 11)
 		return -EINVAL;
-	/* TODO: could support negative values for "set BIT(5) aka "Short Low Pulse Enable"
+	/* TODO(DanielGibson): could support negative values for "set BIT(5) aka "Short Low Pulse Enable"
 	   which seems to shorten the ON times, but that wouldn't work for index 0 of course */
 
 	blink_reg_val = blink_mode_to_regvals(val, advanced);
