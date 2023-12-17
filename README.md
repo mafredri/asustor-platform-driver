@@ -51,6 +51,9 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - Buttons
   - USB Copy Button
   - Power Button (AS6)
+- Power (`/sys/class/leds/power:*`)
+  - LCD
+  - Front panel
 
 ## Installation
 
@@ -132,7 +135,7 @@ one being marked with square brackes (e.g. `[none]  kbd-scrolllock kbd-numlock k
 
 ### `it87` and PWM polarity
 
-This project includes a patched version of the `it87` module (`asustor-it87`) that is part of mainline kernel. It skips PWM sanity checks for the fan because ASUSTOR firmware correctly initializes fans in active low polarity and can be used straight with `fancontrol` or similar tools.
+This project includes a patched version of the `it87` module that is part of mainline kernel (`asustor-it87`). It skips PWM sanity checks for the fan because ASUSTOR firmware correctly initializes fans in active low polarity and can be used straight with `fancontrol` or similar tools.
 
 Note that `it87` conflicts with `asustor-it87`, you may wish to add `it87` to the module blocklist or explicitly load `asustor-it87` instead.
 
