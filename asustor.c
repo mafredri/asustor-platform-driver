@@ -81,23 +81,23 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),     // blue:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 8, NULL, 1, GPIO_ACTIVE_LOW),      // red:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),     // green:status
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 21, NULL, 3, GPIO_ACTIVE_HIGH),  // red:status
+		GPIO_LOOKUP_IDX(GPIO_IT87,   56, NULL,  0, GPIO_ACTIVE_LOW),  // blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,    8, NULL,  1, GPIO_ACTIVE_LOW),  // red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,   31, NULL,  2, GPIO_ACTIVE_LOW),  // green:status
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 21, NULL,  3, GPIO_ACTIVE_HIGH), // red:status
 		// 4
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),     // green:usb
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 6, GPIO_ACTIVE_HIGH),    // blue:lan
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 24, NULL, 7, GPIO_ACTIVE_LOW),   // sata1:green:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 15, NULL, 8, GPIO_ACTIVE_HIGH),  // sata1:red:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 22, NULL, 9, GPIO_ACTIVE_LOW),   // sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87,   21, NULL,  5, GPIO_ACTIVE_LOW),  // green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87,   52, NULL,  6, GPIO_ACTIVE_HIGH), // blue:lan
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 24, NULL,  7, GPIO_ACTIVE_LOW),  // sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 15, NULL,  8, GPIO_ACTIVE_HIGH), // sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 22, NULL,  9, GPIO_ACTIVE_LOW),  // sata2:green:disk
 		GPIO_LOOKUP_IDX(GPIO_AS6100, 19, NULL, 10, GPIO_ACTIVE_HIGH), // sata2:red:disk
 		GPIO_LOOKUP_IDX(GPIO_AS6100, 25, NULL, 11, GPIO_ACTIVE_LOW),  // sata3:green:disk
 		GPIO_LOOKUP_IDX(GPIO_AS6100, 16, NULL, 12, GPIO_ACTIVE_HIGH), // sata3:red:disk
 		GPIO_LOOKUP_IDX(GPIO_AS6100, 18, NULL, 13, GPIO_ACTIVE_LOW),  // sata4:green:disk
 		GPIO_LOOKUP_IDX(GPIO_AS6100, 17, NULL, 14, GPIO_ACTIVE_HIGH), // sata4:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH),   // power:lcd
-		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL, 16, GPIO_ACTIVE_HIGH),   // power:front_panel
+		GPIO_LOOKUP_IDX(GPIO_IT87,   59, NULL, 15, GPIO_ACTIVE_HIGH), // power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87,   29, NULL, 16, GPIO_ACTIVE_HIGH), // power:front_panel
 		{}
 	},
 };
@@ -105,13 +105,13 @@ static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 static struct gpiod_lookup_table asustor_600_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),   // blue:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 8, NULL, 1, GPIO_ACTIVE_LOW),    // red:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),   // green:status
-		GPIO_LOOKUP_IDX(GPIO_ICH, 27, NULL, 3, GPIO_ACTIVE_HIGH),   // red:status
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 4, GPIO_ACTIVE_LOW),   // blue:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  0, GPIO_ACTIVE_LOW),  // blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  1, GPIO_ACTIVE_LOW),  // red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  2, GPIO_ACTIVE_LOW),  // green:status
+		GPIO_LOOKUP_IDX(GPIO_ICH,  27, NULL,  3, GPIO_ACTIVE_HIGH), // red:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL,  4, GPIO_ACTIVE_LOW),  // blue:usb
 		// 5
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 6, GPIO_ACTIVE_HIGH),  // blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL,  6, GPIO_ACTIVE_HIGH), // blue:lan
 		// 7
 		// 8
 		// 9
@@ -129,16 +129,16 @@ static struct gpiod_lookup_table asustor_600_gpio_leds_lookup = {
 static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),	// blue:power
-		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL, 1, GPIO_ACTIVE_LOW),	// red:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),	// green:status
-		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_LOW),	// red:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  0, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  1, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  2, GPIO_ACTIVE_LOW),	// green:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  3, GPIO_ACTIVE_LOW),	// red:status
 		// 4
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),	// green:usb
-		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL, 6, GPIO_ACTIVE_HIGH),	// blue:lan
-		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 7, GPIO_ACTIVE_HIGH),	// sata1:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 8, GPIO_ACTIVE_LOW),	// sata1:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 9, GPIO_ACTIVE_HIGH),	// sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL,  5, GPIO_ACTIVE_LOW),	// green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  6, GPIO_ACTIVE_HIGH),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  7, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL,  8, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL,  9, GPIO_ACTIVE_HIGH),	// sata2:green:disk
 		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 10, GPIO_ACTIVE_LOW),	// sata2:red:disk
 		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 11, GPIO_ACTIVE_HIGH),	// sata3:green:disk
 		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 12, GPIO_ACTIVE_LOW),	// sata3:red:disk
