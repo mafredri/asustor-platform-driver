@@ -1,5 +1,5 @@
 INTERVAL=10
-DEVPATH=hwmon1=devices/platform/it87.656 hwmon2=devices/platform/coretemp.0
+DEVPATH=hwmon1=devices/platform/asustor_it87.656 hwmon2=devices/platform/coretemp.0
 DEVNAME=hwmon1=it8728 hwmon2=coretemp
 FCTEMPS= hwmon1/pwm1=hwmon2/temp2_input
 FCFANS= hwmon1/pwm1=hwmon1/fan1_input
