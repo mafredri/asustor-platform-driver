@@ -239,6 +239,15 @@ static const struct dmi_system_id asustor_systems[] = {
 		.driver_data = &asustor_6700_driver_data,
 	},
 	{
+		// AS51XXT.
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AS Series"),
+		},
+		.driver_data = &asustor_6700_driver_data, // TODO(mafredri): More like 6700 or 6100?
+	},
+	{
+		// AS61XXT.
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AS61xx"),
@@ -246,6 +255,7 @@ static const struct dmi_system_id asustor_systems[] = {
 		.driver_data = &asustor_6100_driver_data,
 	},
 	{
+		// AS6XXT.
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "ASUSTOR Inc."),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AS-6xxT"),
