@@ -18,7 +18,6 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 
-//#define GPIO_IT87 "gpio_it87"
 #define GPIO_IT87                                                              \
 	"asustor_gpio_it87" // use custom patched version for IT8625 support
 #define GPIO_ICH "gpio_ich"
@@ -38,8 +37,7 @@ static struct gpio_led asustor_leds[] = {
 		.default_trigger = "panic",
 	},
 	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 4
-	{ .name		 = "green:usb", // 5
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF },
+	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 5
 	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 6
 	{
 		.name		 = "sata1:green:disk", // 7
@@ -69,7 +67,9 @@ static struct gpio_led asustor_leds[] = {
 	},
 	{ .name		 = "sata4:red:disk",
 	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 14
-	{ .name = "lcd_power", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 15
+	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 15
+	{ .name		 = "power:front_panel",
+	  .default_state = LEDS_GPIO_DEFSTATE_ON }, // 16
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -81,21 +81,23 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),    // blue:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 8, NULL, 1, GPIO_ACTIVE_LOW),     // red:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),    // green:status
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 21, NULL, 3, GPIO_ACTIVE_HIGH), // red:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),     // blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 8, NULL, 1, GPIO_ACTIVE_LOW),      // red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),     // green:status
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 21, NULL, 3, GPIO_ACTIVE_HIGH),  // red:status
 		// 4
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),    // green:usb
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 6, GPIO_ACTIVE_HIGH),   // blue:lan
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 24, NULL, 7, GPIO_ACTIVE_LOW),  // sata1:green:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 15, NULL, 8, GPIO_ACTIVE_HIGH), // sata1:red:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 22, NULL, 9, GPIO_ACTIVE_LOW),  // sata2:green:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 19, NULL, 10, GPIO_ACTIVE_HIGH),// sata2:red:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 25, NULL, 11, GPIO_ACTIVE_LOW), // sata3:green:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 16, NULL, 12, GPIO_ACTIVE_HIGH),// sata3:red:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 18, NULL, 13, GPIO_ACTIVE_LOW), // sata4:green:disk
-		GPIO_LOOKUP_IDX(GPIO_AS6100, 17, NULL, 14, GPIO_ACTIVE_HIGH),// sata4:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),     // green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 6, GPIO_ACTIVE_HIGH),    // blue:lan
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 24, NULL, 7, GPIO_ACTIVE_LOW),   // sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 15, NULL, 8, GPIO_ACTIVE_HIGH),  // sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 22, NULL, 9, GPIO_ACTIVE_LOW),   // sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 19, NULL, 10, GPIO_ACTIVE_HIGH), // sata2:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 25, NULL, 11, GPIO_ACTIVE_LOW),  // sata3:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 16, NULL, 12, GPIO_ACTIVE_HIGH), // sata3:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 18, NULL, 13, GPIO_ACTIVE_LOW),  // sata4:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AS6100, 17, NULL, 14, GPIO_ACTIVE_HIGH), // sata4:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH),   // power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL, 16, GPIO_ACTIVE_HIGH),   // power:front_panel
 		{}
 	},
 };
@@ -103,13 +105,23 @@ static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 static struct gpiod_lookup_table asustor_600_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW), // blue:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 8, NULL, 1, GPIO_ACTIVE_LOW),  // red:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW), // green:status
-		GPIO_LOOKUP_IDX(GPIO_ICH, 27, NULL, 3, GPIO_ACTIVE_HIGH), // red:status
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 4, GPIO_ACTIVE_LOW), // blue:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),   // blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 8, NULL, 1, GPIO_ACTIVE_LOW),    // red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),   // green:status
+		GPIO_LOOKUP_IDX(GPIO_ICH, 27, NULL, 3, GPIO_ACTIVE_HIGH),   // red:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 4, GPIO_ACTIVE_LOW),   // blue:usb
 		// 5
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 6, GPIO_ACTIVE_HIGH), // blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 6, GPIO_ACTIVE_HIGH),  // blue:lan
+		// 7
+		// 8
+		// 9
+		// 10
+		// 11
+		// 12
+		// 13
+		// 14
+		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH), // power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL, 16, GPIO_ACTIVE_HIGH), // power:front_panel
 		{}
 	},
 };
@@ -117,28 +129,28 @@ static struct gpiod_lookup_table asustor_600_gpio_leds_lookup = {
 static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),	//blue power led
-		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL, 1, GPIO_ACTIVE_LOW),	//red power led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),	//green status led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_LOW),	//red status led
-		// TODO: is there a blue USB LED in these devices?
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),	//green usb led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL, 6, GPIO_ACTIVE_HIGH),	//blue LAN
-		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 7, GPIO_ACTIVE_HIGH),	//sata1 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 8, GPIO_ACTIVE_LOW),	//sata1 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 9, GPIO_ACTIVE_HIGH),	//sata2 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 10, GPIO_ACTIVE_LOW),	//sata2 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 11, GPIO_ACTIVE_HIGH),	//sata3 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 12, GPIO_ACTIVE_LOW),	//sata3 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_HIGH),	//sata4 green led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 14, GPIO_ACTIVE_LOW),	//sata4 red led
-		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH),	//LCD power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL, 0, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL, 1, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL, 2, GPIO_ACTIVE_LOW),	// green:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL, 3, GPIO_ACTIVE_LOW),	// red:status
+		// 4
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL, 5, GPIO_ACTIVE_LOW),	// green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL, 6, GPIO_ACTIVE_HIGH),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 7, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 8, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 9, GPIO_ACTIVE_HIGH),	// sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 10, GPIO_ACTIVE_LOW),	// sata2:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 11, GPIO_ACTIVE_HIGH),	// sata3:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 12, GPIO_ACTIVE_LOW),	// sata3:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 13, GPIO_ACTIVE_HIGH),	// sata4:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 14, GPIO_ACTIVE_LOW),	// sata4:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH),	// power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL, 16, GPIO_ACTIVE_HIGH),	// power:front_panel
 		// sata5 green: 61, sata5 red: 62 (probably)
 		// sata6 green: 58, sata6 red: 60 (probably)
 		{}
 	},
 };
-
 // clang-format on
 
 // ASUSTOR Buttons.
@@ -271,6 +283,8 @@ static int gpiochip_match_name(struct gpio_chip *chip, void *data)
 
 static struct gpio_chip *find_chip_by_name(const char *name)
 {
+	// TODO(mafredri): Switch to gpio_device_find as gpiochip_find has
+	// been removed in the latest kernel.
 	return gpiochip_find((void *)name, gpiochip_match_name);
 }
 
