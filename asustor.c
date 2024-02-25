@@ -274,6 +274,7 @@ static struct platform_device *__init asustor_create_pdev(const char *name,
 	return pdev;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
 static int gpiochip_match_name(struct gpio_chip *chip, void *data)
 {
 	const char *name = data;
@@ -283,10 +284,17 @@ static int gpiochip_match_name(struct gpio_chip *chip, void *data)
 
 static struct gpio_chip *find_chip_by_name(const char *name)
 {
-	// TODO(mafredri): Switch to gpio_device_find as gpiochip_find has
-	// been removed in the latest kernel.
 	return gpiochip_find((void *)name, gpiochip_match_name);
 }
+#else
+// DG: kernel 6.7 removed gpiochip_find() and introduced gpio_device_find()
+//     and friends instead
+static struct gpio_chip *find_chip_by_name(const char *name)
+{
+	struct gpio_device *dev = gpio_device_find_by_label(name);
+	return (dev != NULL) ? gpio_device_get_chip(dev) : NULL;
+}
+#endif
 
 // TODO(mafredri): Allow force model for testing.
 static int __init asustor_init(void)
