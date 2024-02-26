@@ -17,6 +17,7 @@
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/version.h>
 
 #define GPIO_IT87                                                              \
 	"asustor_gpio_it87" // use custom patched version for IT8625 support
