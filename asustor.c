@@ -24,67 +24,65 @@
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
 
+// clang-format off
+
 // ASUSTOR Leds.
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
 // https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/
 static struct gpio_led asustor_leds[] = {
-	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 0
-	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 1
-	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 2
+	{ .name = "blue:power",   .default_state = LEDS_GPIO_DEFSTATE_ON },    //  0
+	{ .name = "red:power",    .default_state = LEDS_GPIO_DEFSTATE_OFF },   //  1
+	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON },    //  2
 	{
-		.name		 = "red:status", // 3
-		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.name            = "red:status",                                   //  3
+		.default_state   = LEDS_GPIO_DEFSTATE_OFF,
 		.panic_indicator = 1,
 		.default_trigger = "panic",
 	},
-	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 4
-	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 5
-	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 6
+	{ .name = "blue:usb",  .default_state = LEDS_GPIO_DEFSTATE_OFF },      //  4
+	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },      //  5
+	{ .name = "blue:lan",  .default_state = LEDS_GPIO_DEFSTATE_ON },       //  6
 	{
-		.name		 = "sata1:green:disk", // 7
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.name            = "sata1:green:disk",                             //  7
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name		 = "sata1:red:disk",
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 8
+	{ .name = "sata1:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, //  8
 	{
-		.name		 = "sata2:green:disk", // 9
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.name            = "sata2:green:disk",                             //  9
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name		 = "sata2:red:disk",
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 10
+	{ .name = "sata2:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 10
 	{
-		.name		 = "sata3:green:disk", // 11
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.name            = "sata3:green:disk",                             // 11
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name		 = "sata3:red:disk",
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 12
+	{ .name = "sata3:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 12
 	{
-		.name		 = "sata4:green:disk", // 13
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.name            = "sata4:green:disk",                             // 13
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name		 = "sata4:red:disk",
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 14
-	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 15
-	{ .name		 = "power:front_panel",
-	  .default_state = LEDS_GPIO_DEFSTATE_ON }, // 16
+	{ .name = "sata4:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 14
+	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON },       // 15
 	{
-		.name		 = "sata5:green:disk", // 17
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.name            = "power:front_panel",                            // 16
+		.default_state   = LEDS_GPIO_DEFSTATE_ON
+	},
+	{
+		.name            = "sata5:green:disk",                             // 17
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name		 = "sata5:red:disk",
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 18
+	{ .name = "sata5:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 18
 	{
-		.name		 = "sata6:green:disk", // 19
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.name            = "sata6:green:disk",                             // 19
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,
 		.default_trigger = "disk-activity",
 	},
-	{ .name		 = "sata6:red:disk",
-	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 20
+	{ .name = "sata6:red:disk", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 20
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -92,7 +90,6 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 	.num_leds = ARRAY_SIZE(asustor_leds),
 };
 
-// clang-format off
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
