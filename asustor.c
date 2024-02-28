@@ -71,6 +71,20 @@ static struct gpio_led asustor_leds[] = {
 	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 15
 	{ .name		 = "power:front_panel",
 	  .default_state = LEDS_GPIO_DEFSTATE_ON }, // 16
+	{
+		.name		 = "sata5:green:disk", // 17
+		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.default_trigger = "disk-activity",
+	},
+	{ .name		 = "sata5:red:disk",
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 18
+	{
+		.name		 = "sata6:green:disk", // 19
+		.default_state	 = LEDS_GPIO_DEFSTATE_ON,
+		.default_trigger = "disk-activity",
+	},
+	{ .name		 = "sata6:red:disk",
+	  .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 20
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -147,8 +161,10 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 14, GPIO_ACTIVE_LOW),	// sata4:red:disk
 		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL, 15, GPIO_ACTIVE_HIGH),	// power:lcd
 		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL, 16, GPIO_ACTIVE_HIGH),	// power:front_panel
-		// sata5 green: 61, sata5 red: 62 (probably)
-		// sata6 green: 58, sata6 red: 60 (probably)
+		GPIO_LOOKUP_IDX(GPIO_IT87, 61, NULL, 17, GPIO_ACTIVE_HIGH),	// sata5:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 62, NULL, 18, GPIO_ACTIVE_LOW),	// sata5:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 58, NULL, 19, GPIO_ACTIVE_HIGH),	// sata6:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 60, NULL, 20, GPIO_ACTIVE_LOW),	// sata6:red:disk
 		{}
 	},
 };
