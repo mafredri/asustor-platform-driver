@@ -40,32 +40,32 @@
 // https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/
 static struct gpio_led asustor_leds[] = {
 	{ .name		 = "power:front_panel",
-	  .default_state = LEDS_GPIO_DEFSTATE_ON }, // 1
-	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 2
-	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 3
-	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 4
-	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 5
+	  .default_state = LEDS_GPIO_DEFSTATE_ON },			    // 0
+	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON },    // 1
+	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON },   // 2
+	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF },   // 3
+	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 4
 	{
 		.name		 = "red:status",
 		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
 		.panic_indicator = 1,
 		.default_trigger = "panic",
-	}, // 6
-	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 7
-	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 8
-	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 9
-	DISK_ACT_LED("sata1"), // 10
-	DISK_ERR_LED("sata1"), // 11
-	DISK_ACT_LED("sata2"), // 12
-	DISK_ERR_LED("sata2"), // 13
-	DISK_ACT_LED("sata3"), // 14
-	DISK_ERR_LED("sata3"), // 15
-	DISK_ACT_LED("sata4"), // 16
-	DISK_ERR_LED("sata4"), // 17
-	DISK_ACT_LED("sata5"), // 18
-	DISK_ERR_LED("sata5"), // 19
-	DISK_ACT_LED("sata6"), // 20
-	DISK_ERR_LED("sata6"), // 21
+	},								  // 5
+	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },  // 6
+	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 7
+	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON },	  // 8
+	DISK_ACT_LED("sata1"),						  // 9
+	DISK_ERR_LED("sata1"),						  // 10
+	DISK_ACT_LED("sata2"),						  // 11
+	DISK_ERR_LED("sata2"),						  // 12
+	DISK_ACT_LED("sata3"),						  // 13
+	DISK_ERR_LED("sata3"),						  // 14
+	DISK_ACT_LED("sata4"),						  // 15
+	DISK_ERR_LED("sata4"),						  // 16
+	DISK_ACT_LED("sata5"),						  // 17
+	DISK_ERR_LED("sata5"),						  // 18
+	DISK_ACT_LED("sata6"),						  // 19
+	DISK_ERR_LED("sata6"),						  // 20
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
