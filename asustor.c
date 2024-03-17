@@ -25,13 +25,13 @@
 
 #define DISK_ACT_LED(_name)                                                    \
 	{                                                                      \
-		.name		 = _name ":green:disk",                        \
-		.default_state	 = LEDS_GPIO_DEFSTATE_ON,                      \
+		.name            = _name ":green:disk",                        \
+		.default_state   = LEDS_GPIO_DEFSTATE_ON,                      \
 		.default_trigger = "disk-activity"                             \
 	}
 #define DISK_ERR_LED(_name)                                                    \
 	{                                                                      \
-		.name	       = _name ":red:disk",                            \
+		.name          = _name ":red:disk",                            \
 		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
 	}
 
@@ -39,37 +39,37 @@
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
 // https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/
 static struct gpio_led asustor_leds[] = {
-	{ .name		 = "power:front_panel",
-	  .default_state = LEDS_GPIO_DEFSTATE_ON },			    // 0
+	{ .name          = "power:front_panel",
+	  .default_state = LEDS_GPIO_DEFSTATE_ON },                         // 0
 	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON },    // 1
 	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON },   // 2
 	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF },   // 3
 	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 4
 	{
-		.name		 = "red:status",
-		.default_state	 = LEDS_GPIO_DEFSTATE_OFF,
+		.name            = "red:status",
+		.default_state   = LEDS_GPIO_DEFSTATE_OFF,
 		.panic_indicator = 1,
 		.default_trigger = "panic",
-	},								  // 5
+	},                                                                // 5
 	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },  // 6
 	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 7
-	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON },	  // 8
-	DISK_ACT_LED("sata1"),						  // 9
-	DISK_ERR_LED("sata1"),						  // 10
-	DISK_ACT_LED("sata2"),						  // 11
-	DISK_ERR_LED("sata2"),						  // 12
-	DISK_ACT_LED("sata3"),						  // 13
-	DISK_ERR_LED("sata3"),						  // 14
-	DISK_ACT_LED("sata4"),						  // 15
-	DISK_ERR_LED("sata4"),						  // 16
-	DISK_ACT_LED("sata5"),						  // 17
-	DISK_ERR_LED("sata5"),						  // 18
-	DISK_ACT_LED("sata6"),						  // 19
-	DISK_ERR_LED("sata6"),						  // 20
+	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON },   // 8
+	DISK_ACT_LED("sata1"),                                            // 9
+	DISK_ERR_LED("sata1"),                                            // 10
+	DISK_ACT_LED("sata2"),                                            // 11
+	DISK_ERR_LED("sata2"),                                            // 12
+	DISK_ACT_LED("sata3"),                                            // 13
+	DISK_ERR_LED("sata3"),                                            // 14
+	DISK_ACT_LED("sata4"),                                            // 15
+	DISK_ERR_LED("sata4"),                                            // 16
+	DISK_ACT_LED("sata5"),                                            // 17
+	DISK_ERR_LED("sata5"),                                            // 18
+	DISK_ACT_LED("sata6"),                                            // 19
+	DISK_ERR_LED("sata6"),                                            // 20
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
-	.leds	  = asustor_leds,
+	.leds     = asustor_leds,
 	.num_leds = ARRAY_SIZE(asustor_leds),
 };
 
@@ -147,18 +147,18 @@ static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
 // Unfortunately, gpio-keys-polled does not use gpio lookup tables.
 static struct gpio_keys_button asustor_gpio_keys_table[] = {
 	{
-		.desc	    = "USB Copy Button",
-		.code	    = KEY_COPY,
-		.type	    = EV_KEY,
+		.desc       = "USB Copy Button",
+		.code       = KEY_COPY,
+		.type       = EV_KEY,
 		.active_low = 1,
-		.gpio	    = -1, // Invalid, set in init.
+		.gpio       = -1, // Invalid, set in init.
 	},
 	{
-		.desc	    = "Power Button",
-		.code	    = KEY_POWER,
-		.type	    = EV_KEY,
+		.desc       = "Power Button",
+		.code       = KEY_POWER,
+		.type       = EV_KEY,
 		.active_low = 1,
-		.gpio	    = -1, // Invalid, set in init.
+		.gpio       = -1, // Invalid, set in init.
 	},
 };
 
@@ -166,7 +166,7 @@ static struct gpio_keys_platform_data asustor_keys_pdata = {
 	.buttons       = asustor_gpio_keys_table,
 	.nbuttons      = ARRAY_SIZE(asustor_gpio_keys_table),
 	.poll_interval = 50,
-	.name	       = "asustor-keys",
+	.name          = "asustor-keys",
 };
 
 // clang-format off
@@ -251,13 +251,13 @@ static struct platform_device *asustor_leds_pdev;
 static struct platform_device *asustor_keys_pdev;
 
 static struct platform_device *__init asustor_create_pdev(const char *name,
-							  const void *pdata,
-							  size_t sz)
+                                                          const void *pdata,
+                                                          size_t sz)
 {
 	struct platform_device *pdev;
 
 	pdev = platform_device_register_data(NULL, name, PLATFORM_DEVID_NONE,
-					     pdata, sz);
+	                                     pdata, sz);
 	if (IS_ERR(pdev))
 		pr_err("failed registering %s: %ld\n", name, PTR_ERR(pdev));
 
@@ -300,7 +300,7 @@ static int __init asustor_init(void)
 	}
 
 	pr_info("Found %s/%s\n", system->matches[0].substr,
-		system->matches[1].substr);
+	        system->matches[1].substr);
 
 	driver_data = system->driver_data;
 	gpiod_add_lookup_table(driver_data->leds);
@@ -333,7 +333,7 @@ static int __init asustor_init(void)
 
 	asustor_keys_pdev =
 		asustor_create_pdev("gpio-keys-polled", &asustor_keys_pdata,
-				    sizeof(asustor_keys_pdata));
+	                            sizeof(asustor_keys_pdata));
 	if (IS_ERR(asustor_keys_pdev)) {
 		ret = PTR_ERR(asustor_keys_pdev);
 		platform_device_unregister(asustor_leds_pdev);
@@ -365,5 +365,5 @@ MODULE_DESCRIPTION("Platform driver for ASUSTOR NAS hardware");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:asustor");
 MODULE_SOFTDEP("pre: asustor-it87 asustor-gpio-it87 gpio-ich"
-	       " platform:leds-gpio"
-	       " platform:gpio-keys-polled");
+               " platform:leds-gpio"
+               " platform:gpio-keys-polled");
