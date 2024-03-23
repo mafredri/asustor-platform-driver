@@ -64,6 +64,28 @@ make
 sudo make install
 ```
 
+### NixOS
+Include the platform drivers in your `flake.nix` as follows:
+```
+{
+  inputs.asustor-platform-driver.url = "github:mafredri/asustor-platform-driver";
+  # optional, not necessary for the module
+  #inputs.asustor-platform-driver.inputs.nixpkgs.follows = "nixpkgs";
+
+  outputs = { self, nixpkgs, asustor-platform-driver }: {
+    # change `yourhostname` to your actual hostname
+    nixosConfigurations.yourhostname = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./configuration.nix
+        asustor-platform-driver.nixosModules.default
+        { hardware.asustor.enable = true; }
+      ];
+    };
+  };
+}
+```
+
 ## Tips
 
 ### Control blinking LEDs with `it87`

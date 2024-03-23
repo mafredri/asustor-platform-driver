@@ -26,7 +26,7 @@ modules:
 install: modules_modules
 
 modules_modules:
-	$(foreach mod,$(DRIVER),/usr/bin/install -m 644 -D $(mod).ko $($(mod)_DEST_DIR)/$(mod).ko;)
+	$(foreach mod,$(DRIVER),install -m 644 -D $(mod).ko $($(mod)_DEST_DIR)/$(mod).ko;)
 	depmod -a -F $(SYSTEM_MAP) $(TARGET)
 
 clean:
