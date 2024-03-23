@@ -220,8 +220,8 @@ static const struct dmi_system_id asustor_systems[] = {
 		},
 		.driver_data = &asustor_6700_driver_data,
 	},
-	// the same also seemed to work with AS6602T, though I can't test that anymore
 	{
+		// AS66
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
@@ -229,6 +229,15 @@ static const struct dmi_system_id asustor_systems[] = {
 		.driver_data = &asustor_6700_driver_data,
 	},
 	{
+		// AS63
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Apollolake I Platform"),
+		},
+		.driver_data = &asustor_6700_driver_data,
+	},
+	{
+		// AS61
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AS61xx"),
@@ -236,6 +245,7 @@ static const struct dmi_system_id asustor_systems[] = {
 		.driver_data = &asustor_6100_driver_data,
 	},
 	{
+		// AS6
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "ASUSTOR Inc."),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "AS-6xxT"),
