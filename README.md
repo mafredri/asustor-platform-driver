@@ -179,17 +179,5 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
 DKMS installation to enable module auto-build with kernel upgrades. 
 
 ```
-cd /usr/src/
-git clone <reposity url>
-
-# DKMS seems to be quite strict about directory and version naming
-ln -s asustor-platform-driver asustor-v0.0.1/
-ln -s asustor-platform-driver /usr/src/asustor-gpio-it87-v0.0.1
-ln -s asustor-platform-driver /usr/src/asustor-it87-v0.0.1
-
-dkms install asustor-platform-driver/0.0.1 --verbose
-dkms install asustor-gpio-it87/v0.0.1 -c dkms_gpio_it87.conf --verbose
-dkms install asustor-it87/v0.0.1 -c dkms_it87.conf --verbose
-
-modprobe  asustor_it87 asustor asustor_gpio_it87
+make dkms
 ```
