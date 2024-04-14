@@ -174,3 +174,22 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
 - Support variable amount of disk LEDs
 - ~~Create a new led trigger driver so that we can blink disk LEDs individually, the existing `disk-activity` trigger always blinks all LEDs on activity from any disk~~
   - Pray that [[RFC PATCH v3 00/18] Add block device LED trigger](https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/) by Ian Pilcher lands in the linux kernel
+
+## DKMS
+DKMS installation to enable module auto-build with kernel upgrades. 
+
+```
+cd /usr/src/
+git clone <reposity url>
+
+# DKMS seems to be quite strict about directory and version naming
+ln -s asustor-platform-driver asustor-v0.0.1/
+ln -s asustor-platform-driver /usr/src/asustor-gpio-it87-v0.0.1
+ln -s asustor-platform-driver /usr/src/asustor-it87-v0.0.1
+
+dkms install asustor-platform-driver/0.0.1 --verbose
+dkms install asustor-gpio-it87/v0.0.1 -c dkms_gpio_it87.conf --verbose
+dkms install asustor-it87/v0.0.1 -c dkms_it87.conf --verbose
+
+modprobe  asustor_it87 asustor asustor_gpio_it87
+```
