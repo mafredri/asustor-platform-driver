@@ -74,6 +74,24 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 };
 
 // clang-format off
+static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		//GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL,  0, GPIO_ACTIVE_HIGH),	// power:front_panel
+		//GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL,  1, GPIO_ACTIVE_HIGH),	// power:lcd
+		//GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
+		//GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  5, GPIO_ACTIVE_LOW),	// red:status
+		// 6
+		// 7
+		//GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  9, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
@@ -170,6 +188,15 @@ static struct gpio_keys_platform_data asustor_keys_pdata = {
 };
 
 // clang-format off
+static struct gpiod_lookup_table asustor_fs6700_gpio_keys_lookup = {
+	.dev_id = "gpio-keys-polled",
+	.table = {
+		// 0 (There is no USB Copy Button).
+		GPIO_LOOKUP_IDX(GPIO_IT87, 32, NULL, 1, GPIO_ACTIVE_LOW),
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = { // same for 6700
 	.dev_id = "gpio-keys-polled",
 	.table = {
@@ -193,6 +220,11 @@ static struct gpiod_lookup_table asustor_600_gpio_keys_lookup = {
 struct asustor_driver_data {
 	struct gpiod_lookup_table *leds;
 	struct gpiod_lookup_table *keys;
+};
+
+static struct asustor_driver_data asustor_fs6700_driver_data = {
+	.leds = &asustor_fs6700_gpio_leds_lookup,
+	.keys = &asustor_fs6700_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_6700_driver_data = {
