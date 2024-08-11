@@ -192,7 +192,7 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_keys_lookup = {
 	.dev_id = "gpio-keys-polled",
 	.table = {
 		// 0 (There is no USB Copy Button).
-		GPIO_LOOKUP_IDX(GPIO_IT87, 32, NULL, 1, GPIO_ACTIVE_LOW),
+		// 1 (Power Button is already handled properly via ACPI).
 		{}
 	},
 };
@@ -244,6 +244,16 @@ static struct asustor_driver_data asustor_600_driver_data = {
 
 static const struct dmi_system_id asustor_systems[] = {
 	{
+		// Note: This uses the BIOS release date to help match the FS67xx,
+		//       because otherwise it matches the AS670xT, AS540xT and others
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+			DMI_EXACT_MATCH(DMI_BIOS_DATE, "09/15/2023"),
+		},
+		.driver_data = &asustor_fs6700_driver_data,
+	},
+	{
 		// Note: This not only matches (and works with) AS670xT (Lockerstore Gen2),
 		//       but also AS540xT (Nimbustor Gen2)
 		.matches = {
@@ -252,8 +262,9 @@ static const struct dmi_system_id asustor_systems[] = {
 		},
 		.driver_data = &asustor_6700_driver_data,
 	},
-	// the same also seemed to work with AS6602T, though I can't test that anymore
 	{
+		// Note: The same also seemed to work with AS6602T,
+		//	 though I can't test that anymore
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
