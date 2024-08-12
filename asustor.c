@@ -81,8 +81,8 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 										// power button on the side of the unit
 		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL,  0, GPIO_ACTIVE_LOW),	// power:front_panel
 		// 1
-										// Also controls the red LED inside the
-										// power button on the side of the unit
+										// blue:power also controls the red LED
+										// inside the power button on the side
 		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
 		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
 		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
