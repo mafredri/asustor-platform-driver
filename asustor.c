@@ -346,8 +346,12 @@ static int __init asustor_init(void)
 		return -ENODEV;
 	}
 
-	pr_info("Found %s/%s\n", system->matches[0].substr,
-	        system->matches[1].substr);
+	if (strlen(system->matches[2].substr))
+		pr_info("Found %s/%s/%s\n", system->matches[0].substr,
+	        	system->matches[1].substr, system->matches[2].substr);
+	else
+		pr_info("Found %s/%s\n", system->matches[0].substr,
+	        	system->matches[1].substr);
 
 	driver_data = system->driver_data;
 	gpiod_add_lookup_table(driver_data->leds);
@@ -378,9 +382,8 @@ static int __init asustor_init(void)
 		goto err;
 	}
 
-	asustor_keys_pdev =
-		asustor_create_pdev("gpio-keys-polled", &asustor_keys_pdata,
-	                            sizeof(asustor_keys_pdata));
+	asustor_keys_pdev = asustor_create_pdev(
+		"gpio-keys-polled", &asustor_keys_pdata, sizeof(asustor_keys_pdata));
 	if (IS_ERR(asustor_keys_pdev)) {
 		ret = PTR_ERR(asustor_keys_pdev);
 		platform_device_unregister(asustor_leds_pdev);
