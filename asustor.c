@@ -34,6 +34,16 @@
 		.name          = _name ":red:disk",                            \
 		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
 	}
+#define NVME_ACT_LED(_name)                                                    \
+	{                                                                      \
+		.name          = _name ":green:disk",                          \
+		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
+	}
+#define NVME_ERR_LED(_name)                                                    \
+	{                                                                      \
+		.name          = _name ":red:disk",                            \
+		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
+	}
 
 // ASUSTOR Leds.
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
@@ -66,6 +76,8 @@ static struct gpio_led asustor_leds[] = {
 	DISK_ERR_LED("sata5"),                                            // 18
 	DISK_ACT_LED("sata6"),                                            // 19
 	DISK_ERR_LED("sata6"),                                            // 20
+	NVME_ACT_LED("nvme1"),                                            // 21
+	NVME_ERR_LED("nvme1"),                                            // 22
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -90,8 +102,20 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 		// 6
 		// 7
 		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
-		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  9, GPIO_ACTIVE_LOW),	// sata1:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		// 9
+		// 10
+		// 11
+		// 12
+		// 13
+		// 14
+		// 15
+		// 16
+		// 17
+		// 18
+		// 19
+		// 20
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 21, GPIO_ACTIVE_LOW),	// nvme1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 22, GPIO_ACTIVE_LOW),	// nvme1:red:disk
 		{}
 	},
 };
