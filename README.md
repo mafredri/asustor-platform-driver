@@ -175,3 +175,11 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
 - Support variable amount of disk LEDs
 - ~~Create a new led trigger driver so that we can blink disk LEDs individually, the existing `disk-activity` trigger always blinks all LEDs on activity from any disk~~
   - Pray that [[RFC PATCH v3 00/18] Add block device LED trigger](https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/) by Ian Pilcher lands in the linux kernel
+
+## DKMS
+
+DKMS installation to enable module auto-build with kernel upgrades. 
+
+```
+sudo make dkms
+```
