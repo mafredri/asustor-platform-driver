@@ -176,8 +176,9 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
   - Pray that [[RFC PATCH v3 00/18] Add block device LED trigger](https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/) by Ian Pilcher lands in the linux kernel
 
 ## DKMS
+
 DKMS installation to enable module auto-build with kernel upgrades. 
 
 ```
-make dkms
+sudo make dkms
 ```
