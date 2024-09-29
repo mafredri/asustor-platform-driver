@@ -34,6 +34,16 @@
 		.name          = _name ":red:disk",                            \
 		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
 	}
+#define NVME_ACT_LED(_name)                                                    \
+	{                                                                      \
+		.name          = _name ":green:disk",                          \
+		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
+	}
+#define NVME_ERR_LED(_name)                                                    \
+	{                                                                      \
+		.name          = _name ":red:disk",                            \
+		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
+	}
 
 // ASUSTOR Leds.
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
@@ -66,6 +76,8 @@ static struct gpio_led asustor_leds[] = {
 	DISK_ERR_LED("sata5"),                                            // 18
 	DISK_ACT_LED("sata6"),                                            // 19
 	DISK_ERR_LED("sata6"),                                            // 20
+	NVME_ACT_LED("nvme1"),                                            // 21
+	NVME_ERR_LED("nvme1"),                                            // 22
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -74,6 +86,68 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 };
 
 // clang-format off
+static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+										// Red LEDs to the left and right of the
+										// power button on the side of the unit
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL,  0, GPIO_ACTIVE_LOW),	// power:front_panel
+		// 1
+										// blue:power also controls the red LED
+										// inside the power button on the side
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  5, GPIO_ACTIVE_LOW),	// red:status
+		// 6
+		// 7
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
+		// 9
+		// 10
+		// 11
+		// 12
+		// 13
+		// 14
+		// 15
+		// 16
+		// 17
+		// 18
+		// 19
+		// 20
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 21, GPIO_ACTIVE_LOW),	// nvme1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 22, GPIO_ACTIVE_LOW),	// nvme1:red:disk
+		{}
+	},
+};
+
+static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL,  0, GPIO_ACTIVE_HIGH),	// power:front_panel
+		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL,  1, GPIO_ACTIVE_HIGH),	// power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  5, GPIO_ACTIVE_LOW),	// red:status
+		// 6
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL,  7, GPIO_ACTIVE_LOW),	// green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  9, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_HIGH),	// sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 12, GPIO_ACTIVE_LOW),	// sata2:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 13, GPIO_ACTIVE_HIGH),	// sata3:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 14, GPIO_ACTIVE_LOW),	// sata3:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 15, GPIO_ACTIVE_HIGH),	// sata4:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 16, GPIO_ACTIVE_LOW),	// sata4:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 61, NULL, 17, GPIO_ACTIVE_HIGH),	// sata5:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 62, NULL, 18, GPIO_ACTIVE_LOW),	// sata5:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 58, NULL, 19, GPIO_ACTIVE_HIGH),	// sata6:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 60, NULL, 20, GPIO_ACTIVE_LOW),	// sata6:red:disk
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
@@ -113,34 +187,6 @@ static struct gpiod_lookup_table asustor_600_gpio_leds_lookup = {
 		{}
 	},
 };
-
-static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
-	.dev_id = "leds-gpio",
-	.table = {
-		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL,  0, GPIO_ACTIVE_HIGH),	// power:front_panel
-		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL,  1, GPIO_ACTIVE_HIGH),	// power:lcd
-		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
-		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
-		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
-		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  5, GPIO_ACTIVE_LOW),	// red:status
-		// 6
-		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL,  7, GPIO_ACTIVE_LOW),	// green:usb
-		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
-		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  9, GPIO_ACTIVE_HIGH),	// sata1:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_HIGH),	// sata2:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 12, GPIO_ACTIVE_LOW),	// sata2:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 13, GPIO_ACTIVE_HIGH),	// sata3:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 14, GPIO_ACTIVE_LOW),	// sata3:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 15, GPIO_ACTIVE_HIGH),	// sata4:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 16, GPIO_ACTIVE_LOW),	// sata4:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 61, NULL, 17, GPIO_ACTIVE_HIGH),	// sata5:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 62, NULL, 18, GPIO_ACTIVE_LOW),	// sata5:red:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 58, NULL, 19, GPIO_ACTIVE_HIGH),	// sata6:green:disk
-		GPIO_LOOKUP_IDX(GPIO_IT87, 60, NULL, 20, GPIO_ACTIVE_LOW),	// sata6:red:disk
-		{}
-	},
-};
 // clang-format on
 
 // ASUSTOR Buttons.
@@ -170,6 +216,15 @@ static struct gpio_keys_platform_data asustor_keys_pdata = {
 };
 
 // clang-format off
+static struct gpiod_lookup_table asustor_fs6700_gpio_keys_lookup = {
+	.dev_id = "gpio-keys-polled",
+	.table = {
+		// 0 (There is no USB Copy Button).
+		// 1 (Power Button is already handled properly via ACPI).
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = { // same for 6700
 	.dev_id = "gpio-keys-polled",
 	.table = {
@@ -195,6 +250,11 @@ struct asustor_driver_data {
 	struct gpiod_lookup_table *keys;
 };
 
+static struct asustor_driver_data asustor_fs6700_driver_data = {
+	.leds = &asustor_fs6700_gpio_leds_lookup,
+	.keys = &asustor_fs6700_gpio_keys_lookup,
+};
+
 static struct asustor_driver_data asustor_6700_driver_data = {
 	.leds = &asustor_6700_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
@@ -212,6 +272,16 @@ static struct asustor_driver_data asustor_600_driver_data = {
 
 static const struct dmi_system_id asustor_systems[] = {
 	{
+		// Note: This uses the BIOS release date to help match the FS67xx,
+		//       because otherwise it matches the AS670xT, AS540xT and others
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+			DMI_EXACT_MATCH(DMI_BIOS_DATE, "09/15/2023"),
+		},
+		.driver_data = &asustor_fs6700_driver_data,
+	},
+	{
 		// Note: This not only matches (and works with) AS670xT (Lockerstore Gen2),
 		//       but also AS540xT (Nimbustor Gen2)
 		.matches = {
@@ -220,8 +290,9 @@ static const struct dmi_system_id asustor_systems[] = {
 		},
 		.driver_data = &asustor_6700_driver_data,
 	},
-	// the same also seemed to work with AS6602T, though I can't test that anymore
 	{
+		// Note: The same also seemed to work with AS6602T,
+		//	 though I can't test that anymore
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
@@ -299,8 +370,12 @@ static int __init asustor_init(void)
 		return -ENODEV;
 	}
 
-	pr_info("Found %s/%s\n", system->matches[0].substr,
-	        system->matches[1].substr);
+	if (strlen(system->matches[2].substr))
+		pr_info("Found %s/%s/%s\n", system->matches[0].substr,
+	        	system->matches[1].substr, system->matches[2].substr);
+	else
+		pr_info("Found %s/%s\n", system->matches[0].substr,
+	        	system->matches[1].substr);
 
 	driver_data = system->driver_data;
 	gpiod_add_lookup_table(driver_data->leds);
@@ -331,9 +406,8 @@ static int __init asustor_init(void)
 		goto err;
 	}
 
-	asustor_keys_pdev =
-		asustor_create_pdev("gpio-keys-polled", &asustor_keys_pdata,
-	                            sizeof(asustor_keys_pdata));
+	asustor_keys_pdev = asustor_create_pdev(
+		"gpio-keys-polled", &asustor_keys_pdata, sizeof(asustor_keys_pdata));
 	if (IS_ERR(asustor_keys_pdev)) {
 		ret = PTR_ERR(asustor_keys_pdev);
 		platform_device_unregister(asustor_leds_pdev);
