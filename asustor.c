@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/leds.h>
 #include <linux/module.h>
+#include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <linux/version.h>
 
@@ -246,44 +247,51 @@ static struct gpiod_lookup_table asustor_600_gpio_keys_lookup = {
 
 // ASUSTOR Platform.
 struct asustor_driver_data {
+	const char *name;
 	struct gpiod_lookup_table *leds;
 	struct gpiod_lookup_table *keys;
 };
 
 static struct asustor_driver_data asustor_fs6700_driver_data = {
+	.name = "FS67xx",
 	.leds = &asustor_fs6700_gpio_leds_lookup,
 	.keys = &asustor_fs6700_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_6700_driver_data = {
+	.name = "AS67xx",
+	.leds = &asustor_6700_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
+};
+
+static struct asustor_driver_data asustor_6600_driver_data = {
+	// NOTE: This is (currently?) the same as for AS6700
+	//       because it seems to use the same GPIO numbers,
+	//       but listed extra for the different name
+	.name = "AS66xx",
 	.leds = &asustor_6700_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_6100_driver_data = {
+	.name = "AS61xx",
 	.leds = &asustor_6100_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_600_driver_data = {
+	.name = "AS6xx",
 	.leds = &asustor_600_gpio_leds_lookup,
 	.keys = &asustor_600_gpio_keys_lookup,
 };
 
 static const struct dmi_system_id asustor_systems[] = {
 	{
-		// Note: This uses the BIOS release date to help match the FS67xx,
-		//       because otherwise it matches the AS670xT, AS540xT and others
-		.matches = {
-			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
-			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
-			DMI_EXACT_MATCH(DMI_BIOS_DATE, "09/15/2023"),
-		},
-		.driver_data = &asustor_fs6700_driver_data,
-	},
-	{
 		// Note: This not only matches (and works with) AS670xT (Lockerstore Gen2),
-		//       but also AS540xT (Nimbustor Gen2)
+		//       but also AS540xT (Nimbustor Gen2) and, unfortunately, also
+		//       Flashstor (FS6706T and FS6712X) which can't be detected with DMI but is
+		//       different enough from the AS67xx devices to need different treatment.
+		//       asustor_init() has additional code to detect FS67xx based on available PCIe devices
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
@@ -297,7 +305,7 @@ static const struct dmi_system_id asustor_systems[] = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
 		},
-		.driver_data = &asustor_6700_driver_data,
+		.driver_data = &asustor_6600_driver_data,
 	},
 	{
 		.matches = {
@@ -370,14 +378,27 @@ static int __init asustor_init(void)
 		return -ENODEV;
 	}
 
-	if (strlen(system->matches[2].substr))
-		pr_info("Found %s/%s/%s\n", system->matches[0].substr,
-	        	system->matches[1].substr, system->matches[2].substr);
-	else
-		pr_info("Found %s/%s\n", system->matches[0].substr,
-	        	system->matches[1].substr);
-
 	driver_data = system->driver_data;
+
+	// figure out if this is really an AS67xx or instead a FS67xx ("Flashstor"),
+	// which has different LEDs and only supports m.2 SSDs (no SATA drives)
+	if (driver_data == &asustor_6700_driver_data) {
+		// this matches the "ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch" (rev 01)
+		// PCI bridge (vendor ID 0x1b21, device ID 0x2806 aka 1b21:2806), which AFAIK is only used
+		// in Flashtor devices (though unfortunately we only had FS6712X and AS5402T to check)
+		// see also https://github.com/mafredri/asustor-platform-driver/pull/21#issuecomment-2420883171
+		// and following.
+		if (pci_get_device(0x1b21, 0x2806, NULL) != NULL) {
+			// TODO: if necessary, we could count those devices; the current assumption
+			//       is that the bigger *A*S67xx (or AS54xx) devices don't have this at all
+
+			driver_data = &asustor_fs6700_driver_data;
+		}
+	}
+
+	pr_info("Found %s (%s/%s)\n", driver_data->name, system->matches[0].substr,
+	        system->matches[1].substr);
+
 	gpiod_add_lookup_table(driver_data->leds);
 	gpiod_add_lookup_table(driver_data->keys);
 
