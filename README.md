@@ -58,6 +58,15 @@ The following DMI system-manufacturer / system-product-name combinations are cur
 ## Features
 
 - LEDs (front panel, disk)
+  - Represented as subdirectories in `/sys/class/leds/`
+    - In the subdirectories, you can set `brightness` to 0 or 1 to switch the LED off or on, for example  
+      `$ echo 1 | sudo tee blue:power/brightness`  
+      similarly, the `trigger` can be configured, see [below](#set-triggers-for-leds)
+    - Sometimes the name of an LED doesn't exactly represent its color, for example, on the
+      *Flashstor FS6712X*, the `blue:lan` LED is actually purple when connected with 10GBit
+      (but blue when connected with 1GBit). Also, sometimes two LEDs physically appear as one, so
+      enabling both will create a third color (e.g. if both `nvme1:green` and `nvme1:red` are enabled,
+      it will look orange).
   - See [asustor.c](asustor.c).
 - Buttons
   - USB Copy Button
@@ -143,6 +152,8 @@ echo r8169-0-200:00:link > /sys/class/leds/blue\:lan
 
 `cat /sys/class/leds/green\:usb/trigger` will list the available triggers, with the currently used
 one being marked with square brackes (e.g. `[none]  kbd-scrolllock kbd-numlock kbd-capslock ...`).
+
+Note that currently the disk-related triggers (like `disk-activity`) do **not** work with NVME drives.
 
 ### `it87` and PWM polarity
 

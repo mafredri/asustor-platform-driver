@@ -46,22 +46,25 @@
 		.default_state = LEDS_GPIO_DEFSTATE_OFF                        \
 	}
 
+// clang-format off
+
 // ASUSTOR Leds.
 // If ledtrig-blkdev ever lands, use that instead of disk-activity:
 // https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/
+// Also, the "disk-activity" trigger does (currently?) *not* trigger for NVME devices.
 static struct gpio_led asustor_leds[] = {
-	{ .name          = "power:front_panel",
-	  .default_state = LEDS_GPIO_DEFSTATE_ON },                         // 0
+	{ .name          = "power:front_panel",                             // 0
+	  .default_state = LEDS_GPIO_DEFSTATE_ON },
 	{ .name = "power:lcd", .default_state = LEDS_GPIO_DEFSTATE_ON },    // 1
 	{ .name = "blue:power", .default_state = LEDS_GPIO_DEFSTATE_ON },   // 2
 	{ .name = "red:power", .default_state = LEDS_GPIO_DEFSTATE_OFF },   // 3
 	{ .name = "green:status", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 4
 	{
-		.name            = "red:status",
+		.name            = "red:status",                            // 5
 		.default_state   = LEDS_GPIO_DEFSTATE_OFF,
 		.panic_indicator = 1,
 		.default_trigger = "panic",
-	},                                                                // 5
+	},
 	{ .name = "blue:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF },  // 6
 	{ .name = "green:usb", .default_state = LEDS_GPIO_DEFSTATE_OFF }, // 7
 	{ .name = "blue:lan", .default_state = LEDS_GPIO_DEFSTATE_ON },   // 8
@@ -86,7 +89,6 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 	.num_leds = ARRAY_SIZE(asustor_leds),
 };
 
-// clang-format off
 static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
@@ -103,18 +105,7 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 		// 6
 		// 7
 		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
-		// 9
-		// 10
-		// 11
-		// 12
-		// 13
-		// 14
-		// 15
-		// 16
-		// 17
-		// 18
-		// 19
-		// 20
+		// LEDs 9 - 20 don't exist in this system
 		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 21, GPIO_ACTIVE_LOW),	// nvme1:green:disk
 		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 22, GPIO_ACTIVE_LOW),	// nvme1:red:disk
 		{}
@@ -348,8 +339,6 @@ static const struct dmi_system_id asustor_systems[] = {
 		.driver_data = &asustor_6700_driver_data,
 	},
 	{
-		// Note: The same also seemed to work with AS6602T,
-		//	 though I can't test that anymore
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
