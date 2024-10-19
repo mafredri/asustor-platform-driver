@@ -252,6 +252,8 @@ struct asustor_driver_data {
 	struct gpiod_lookup_table *keys;
 };
 
+// NOTE: if you add another device here, update VALID_OVERRIDE_NAMES accordingly!
+
 static struct asustor_driver_data asustor_fs6700_driver_data = {
 	.name = "FS67xx",
 	.leds = &asustor_fs6700_gpio_leds_lookup,
@@ -284,6 +286,8 @@ static struct asustor_driver_data asustor_600_driver_data = {
 	.leds = &asustor_600_gpio_leds_lookup,
 	.keys = &asustor_600_gpio_keys_lookup,
 };
+
+#define VALID_OVERRIDE_NAMES "AS6xx, AS61xx, AS66xx, AS67xx, FS67xx"
 
 static const struct dmi_system_id asustor_systems[] = {
 	{
@@ -365,6 +369,13 @@ static struct gpio_chip *find_chip_by_name(const char *name)
 }
 #endif
 
+static char *force_device = "";
+module_param(force_device, charp, S_IRUSR | S_IRGRP | S_IROTH);
+MODULE_PARM_DESC(
+	force_device,
+	"Don't try to detect ASUSTOR device, use the given one instead. "
+	"Valid values: " VALID_OVERRIDE_NAMES);
+
 // TODO(mafredri): Allow force model for testing.
 static int __init asustor_init(void)
 {
@@ -372,32 +383,64 @@ static int __init asustor_init(void)
 	const struct gpiod_lookup *keys_table;
 	int ret, i;
 
-	system = dmi_first_match(asustor_systems);
-	if (!system) {
-		pr_info("No supported ASUSTOR mainboard found");
-		return -ENODEV;
-	}
-
-	driver_data = system->driver_data;
-
-	// figure out if this is really an AS67xx or instead a FS67xx ("Flashstor"),
-	// which has different LEDs and only supports m.2 SSDs (no SATA drives)
-	if (driver_data == &asustor_6700_driver_data) {
-		// this matches the "ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch" (rev 01)
-		// PCI bridge (vendor ID 0x1b21, device ID 0x2806 aka 1b21:2806), which AFAIK is only used
-		// in Flashtor devices (though unfortunately we only had FS6712X and AS5402T to check)
-		// see also https://github.com/mafredri/asustor-platform-driver/pull/21#issuecomment-2420883171
-		// and following.
-		if (pci_get_device(0x1b21, 0x2806, NULL) != NULL) {
-			// TODO: if necessary, we could count those devices; the current assumption
-			//       is that the bigger *A*S67xx (or AS54xx) devices don't have this at all
-
+	driver_data = NULL;
+	// allow overriding detection with force_device kernel parameter
+	if (force_device && *force_device) {
+		// special case: FS67xx isn't in the asustor_systems table, as it can't
+		// be detected through DMI
+		if (strcmp(force_device, "FS67xx") == 0) {
 			driver_data = &asustor_fs6700_driver_data;
+		} else {
+			for (i = 0; i < ARRAY_SIZE(asustor_systems); i++) {
+				struct asustor_driver_data *dd =
+					asustor_systems[i].driver_data;
+				if (dd && dd->name &&
+				    strcmp(force_device, dd->name) == 0) {
+					driver_data = dd;
+					break;
+				}
+			}
+			if (driver_data == NULL) {
+				pr_err("force_device parameter set to invalid value \"%s\"!\n",
+				       force_device);
+				pr_info("  valid force_device values are: %s\n",
+				        VALID_OVERRIDE_NAMES);
+				return -EINVAL;
+			}
 		}
-	}
+		pr_info("force_device parameter is set to \"%s\", treating your machine as "
+		        "that device instead of trying to detect it!\n",
+		        force_device);
+	} else { // try to detect the ASUSTOR device
+		system = dmi_first_match(asustor_systems);
+		if (!system) {
+			pr_info("No supported ASUSTOR mainboard found");
+			return -ENODEV;
+		}
 
-	pr_info("Found %s (%s/%s)\n", driver_data->name, system->matches[0].substr,
-	        system->matches[1].substr);
+		driver_data = system->driver_data;
+
+		// figure out if this is really an AS67xx or instead a FS67xx ("Flashstor"),
+		// which has different LEDs and only supports m.2 SSDs (no SATA drives)
+		if (driver_data == &asustor_6700_driver_data) {
+			// this matches the "ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3
+			// Packet Switch" (rev 01) PCI bridge (vendor ID 0x1b21, device ID 0x2806
+			// aka 1b21:2806), which AFAIK is only used in Flashtor devices
+			// (though unfortunately we only had FS6712X and AS5402T to check)
+			// see also https://github.com/mafredri/asustor-platform-driver/pull/21#issuecomment-2420883171
+			// and following.
+			if (pci_get_device(0x1b21, 0x2806, NULL) != NULL) {
+				// TODO: if necessary, we could count those devices; the current
+				//       assumption is that even the bigger *A*S67xx (or AS54xx)
+				//       devices don't have this at all
+
+				driver_data = &asustor_fs6700_driver_data;
+			}
+		}
+
+		pr_info("Found %s or similar (%s/%s)\n", driver_data->name,
+		        system->matches[0].substr, system->matches[1].substr);
+	}
 
 	gpiod_add_lookup_table(driver_data->leds);
 	gpiod_add_lookup_table(driver_data->keys);
@@ -427,8 +470,9 @@ static int __init asustor_init(void)
 		goto err;
 	}
 
-	asustor_keys_pdev = asustor_create_pdev(
-		"gpio-keys-polled", &asustor_keys_pdata, sizeof(asustor_keys_pdata));
+	asustor_keys_pdev =
+		asustor_create_pdev("gpio-keys-polled", &asustor_keys_pdata,
+	                            sizeof(asustor_keys_pdata));
 	if (IS_ERR(asustor_keys_pdev)) {
 		ret = PTR_ERR(asustor_keys_pdev);
 		platform_device_unregister(asustor_leds_pdev);
