@@ -38,12 +38,22 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - AS5402T, AS5404T
 - FS6706T (NOT TESTED!), FS6712X
 - .. possibly more, if they're similar enough.
-  The following DMI system-manufacturer / system-product-name combinations are currently supported
-  (see `sudo dmidecode -s system-manufacturer` and `sudo dmidecode -s system-product-name`):
-    - "ASUSTOR Inc." / "AS-6xxT"
-    - "Insyde" / "AS61xx"
-    - "Insyde" / "GeminiLake"
-    - "Intel Corporation" / "Jasper Lake Client Platform"
+
+The following DMI system-manufacturer / system-product-name combinations are currently supported
+(see `sudo dmidecode -s system-manufacturer` and `sudo dmidecode -s system-product-name`):
+* "ASUSTOR Inc." / "AS-6xxT"
+    - Identified by `asustor` kernel module as **"AS6xx"**
+* "Insyde" / "AS61xx"
+    - Identified by `asustor` kernel module as **"AS61xx"**
+* "Insyde" / "GeminiLake"
+    - These are the *Lockerstor* AS66xxT devices, like AS6604T
+        - *maybe also others like Nimbustor AS520xT?*
+    - Identified by `asustor` kernel module as **"AS66xx"**
+* "Intel Corporation" / "Jasper Lake Client Platform"
+    - These are the *Lockerstor Gen2* AS67xxT (AS6702T etc), *Nimbustor Gen2* AS54xxT (AS5402T etc)
+      and *Flashstor* FS6706T/FS6712X devices.
+    - Identified by `asustor` kernel module as **"AS67xx"** for *Lockerstor Gen2* and *Nimbustor Gen2*
+    - **_or_** identified as **"FS67xx"** if it's a *Flashstor* device
 
 ## Features
 
@@ -141,6 +151,28 @@ This project includes a patched version of the `it87` module that is part of mai
 Note that `it87` conflicts with `asustor-it87`, you may wish to add `it87` to the module blocklist or explicitly load `asustor-it87` instead.
 
 ~~You may want to use [`patches/001-ignore-pwm-polarity-it87.patch`](patches/001-ignore-pwm-polarity-it87.patch) for the `it87` kernel module if it complains about PWM polarity. In this case, it's possible to use `fix_pwm_polarity=1`, however, it may reverse the polarity which is unwanted (i.e. high is low, low is high). It works fine when left as configured by the firmware.~~
+
+### Override detection of ASUSTOR device by `asustor` kernel module
+
+If the `asustor` kernel module doesn't detect your device correctly, you can force it to treat your
+ASUSTOR device as one of the supported devices by setting the `force_device` module parameter.
+
+can be used like:  
+`$ sudo modprobe asustor force_device=AS66xx`  
+or by creating an `/etc/modprobe.d/asustor.conf` text file with the following content:
+
+```
+# override device detection of the asustor kernel module
+options asustor force_device=FS67xx
+```
+
+Of course you should replace "FS67xx" with the device you want to try, see the [Compatiblity](#compatibility)
+section above for how the `asustor` kernel module identifies devices, or  
+`$ sudo modinfo -p asustor`  
+which will print a short usage info including the currently supported device names for `force_device`.
+
+_**NOTE:** If you need to use the `force_device` parameter to make your device work, please open an issue
+so the detection logic in the `asustor` kernel module can be fixed to properly support it._
 
 ### Misc
 
