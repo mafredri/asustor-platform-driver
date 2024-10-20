@@ -198,6 +198,7 @@ sudo dmidecode -s bios-version
 sudo dmidecode -s bios-release-date
 sudo dmidecode -s bios-revision
 sudo gpioinfo
+sudo lspci -nn -PP
 ```
 
 NOTE: If `gpioinfo` does not return anything, you may need to figure out which (if any) gpio drivers to load. Also keep in mind that your distribution may not ship with all `gpio-` drivers, so you may need to compile them yourself.

@@ -245,23 +245,53 @@ static struct gpiod_lookup_table asustor_600_gpio_keys_lookup = {
 };
 // clang-format on
 
+struct pci_device_match {
+	// match PCI devices with the given vendorID and productID (to help identify ASUSTOR systems)
+	// you can get them from `lspci -nn`, for example in
+	// "00:08.0 System peripheral [0880]: Intel Corporation Device [8086:4e11]"
+	// 0x8086 is the vendorID and 0x4e11 is the deviceID
+	uint16_t vendorID;
+	uint16_t deviceID;
+
+	int16_t min_count; // how often that device should exist at least
+	int16_t max_count; // how often that device should exist at most
+};
+
 // ASUSTOR Platform.
 struct asustor_driver_data {
-	const char *name;
+	const char *name; // used for force_device and for some log messages
+
+	struct pci_device_match pci_matches[4];
+
 	struct gpiod_lookup_table *leds;
 	struct gpiod_lookup_table *keys;
 };
+
+#define VALID_OVERRIDE_NAMES "AS6xx, AS61xx, AS66xx, AS67xx, FS67xx"
 
 // NOTE: if you add another device here, update VALID_OVERRIDE_NAMES accordingly!
 
 static struct asustor_driver_data asustor_fs6700_driver_data = {
 	.name = "FS67xx",
+	// FS67xx needs to match PCI devices because it has the same DMI data as *A*S67xx
+	.pci_matches = {
+		// PCI bridge: ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch (rev 01)
+		// FS6712X seems to have 15 of these, no idea about FS6706T (so I keep min_count at 1)
+		// currently the upper limit doesn't matter so I just use 10000
+		{ 0x1b21, 0x2806, 1, 10000 },
+	},
 	.leds = &asustor_fs6700_gpio_leds_lookup,
 	.keys = &asustor_fs6700_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_6700_driver_data = {
 	.name = "AS67xx",
+	// AS67xx needs to match PCI devices because it has the same DMI data as *F*S67xx
+	.pci_matches = {
+		// PCI bridge: ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch (rev 01)
+		// *F*S67xx seems to use these, I think *A*S67xx doesn't, so expect 0
+		{ 0x1b21, 0x2806, 0, 0 },
+	},
 	.leds = &asustor_6700_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
@@ -271,6 +301,8 @@ static struct asustor_driver_data asustor_6600_driver_data = {
 	//       because it seems to use the same GPIO numbers,
 	//       but listed extra for the different name
 	.name = "AS66xx",
+	// This (and the remaining systems) don't need to match PCI devices to be detected,
+	// so they're not set here (and thus initialized to all-zero)
 	.leds = &asustor_6700_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
@@ -287,15 +319,28 @@ static struct asustor_driver_data asustor_600_driver_data = {
 	.keys = &asustor_600_gpio_keys_lookup,
 };
 
-#define VALID_OVERRIDE_NAMES "AS6xx, AS61xx, AS66xx, AS67xx, FS67xx"
-
+// NOTE: Don't use this table with dmi_first_match(), because it has two entries that
+//       match the same (AS67xx and FS67xx). find_matching_asustor_system() handles
+//       that by also matching PCI devices from asustor_driver_data::pci_matches.
+//       This table only exists in this form (instead of just using an array of
+//       asustor_driver_data) for MODULE_DEVICE_TABLE().
 static const struct dmi_system_id asustor_systems[] = {
+	// NOTE: each entry in this table must have its own unique asustor_driver_data
+	//       (having a unique .name) set as .driver_data
 	{
-		// Note: This not only matches (and works with) AS670xT (Lockerstore Gen2),
-		//       but also AS540xT (Nimbustor Gen2) and, unfortunately, also
-		//       Flashstor (FS6706T and FS6712X) which can't be detected with DMI but is
-		//       different enough from the AS67xx devices to need different treatment.
-		//       asustor_init() has additional code to detect FS67xx based on available PCIe devices
+		// Note: yes, this is the same DMI match as the next entry, because just by DMI,
+		//       FS67xx and AS67xx can't be told apart. But our custom matching logic
+		//       in find_matching_asustor_system() also takes driver_data->pci_matches[]
+		//       into account, so that should be ok.
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+		},
+		.driver_data = &asustor_fs6700_driver_data,
+	},
+	{
+		// Note: This not only matches (and works with) AS670xT (Lockerstor Gen2),
+		//       but also AS540xT (Nimbustor Gen2)
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
@@ -369,6 +414,116 @@ static struct gpio_chip *find_chip_by_name(const char *name)
 }
 #endif
 
+/**
+ *	dmi_matches - check if dmi_system_id structure matches system DMI data
+ *	@dmi: pointer to the dmi_system_id structure to check
+ */
+// copied from dmi_matches() in Linux 6.11.2 drivers/firmware/dmi_scan.c where it's private (static)
+// with only one small change (dmi_val = dmi_get_system_info(s) instead of dmi_ident[s])
+static bool dmi_matches(const struct dmi_system_id *dmi)
+{
+	int i;
+	const char *dmi_val;
+
+	for (i = 0; i < ARRAY_SIZE(dmi->matches); i++) {
+		int s = dmi->matches[i].slot;
+		if (s == DMI_NONE)
+			break;
+		if (s == DMI_OEM_STRING) {
+			/* DMI_OEM_STRING must be exact match */
+			const struct dmi_device *valid;
+
+			valid = dmi_find_device(DMI_DEV_TYPE_OEM_STRING,
+			                        dmi->matches[i].substr, NULL);
+			if (valid)
+				continue;
+		} else if ((dmi_val = dmi_get_system_info(s)) != NULL) {
+			if (dmi->matches[i].exact_match) {
+				if (!strcmp(dmi_val, dmi->matches[i].substr))
+					continue;
+			} else {
+				if (strstr(dmi_val, dmi->matches[i].substr))
+					continue;
+			}
+		}
+
+		/* No match */
+		return false;
+	}
+	return true;
+}
+
+// how often does the PCI(e) device with given vendor/device IDs exist in this system?
+static int count_pci_device_instances(unsigned int vendor, unsigned int device)
+{
+	// start with -1 as the do-while loop runs at least once even if nothing is found
+	int ret            = -1;
+	struct pci_dev *pd = NULL;
+	do {
+		++ret;
+		pd = pci_get_device(vendor, device, pd);
+	} while (pd != NULL);
+	return ret;
+}
+
+// check if sys->pci_matches[] match with the PCI devices in the system
+// NOTE: this only checks if the devices in sys->pci_matches[] exist in the system
+//       with the expected count (or do *not* exist if the counts are 0),
+//       PCI devices existing that aren't listed in sys->pci_matches[] is expected
+//       and does not make this function fail.
+static bool pci_devices_match(const struct asustor_driver_data *sys)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(sys->pci_matches); ++i) {
+		int dev_cnt;
+		const struct pci_device_match *pdm;
+		pdm = &sys->pci_matches[i];
+		if (pdm->vendorID == 0 && pdm->deviceID == 0) {
+			// no more entries, the previous ones matched
+			// or we would've returned false already
+			return true;
+		}
+		dev_cnt = count_pci_device_instances(pdm->vendorID,
+		                                     pdm->deviceID);
+		if (dev_cnt < pdm->min_count || dev_cnt > pdm->max_count) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// find out which ASUSTOR system this is, based on asustor_systems[], including
+// their linked asustor_driver_data's pci_matches
+// returns NULL if this isn't a known system
+static const struct dmi_system_id *find_matching_asustor_system(void)
+{
+	int as_idx;
+
+	for (as_idx = 0; as_idx < ARRAY_SIZE(asustor_systems); as_idx++) {
+		struct asustor_driver_data *dd;
+		const struct dmi_system_id *sys;
+		sys = &asustor_systems[as_idx];
+		dd  = sys->driver_data;
+		if (dd == NULL) {
+			// no driverdata? must be at end of table
+			break;
+		}
+
+		if (!dmi_matches(sys)) {
+			continue;
+		}
+
+		if (!pci_devices_match(dd)) {
+			continue;
+		}
+
+		// DMI and PCI devices matched => this is it
+		return sys;
+	}
+
+	return NULL;
+}
+
 static char *force_device = "";
 module_param(force_device, charp, S_IRUSR | S_IRGRP | S_IROTH);
 MODULE_PARM_DESC(
@@ -386,57 +541,33 @@ static int __init asustor_init(void)
 	driver_data = NULL;
 	// allow overriding detection with force_device kernel parameter
 	if (force_device && *force_device) {
-		// special case: FS67xx isn't in the asustor_systems table, as it can't
-		// be detected through DMI
-		if (strcmp(force_device, "FS67xx") == 0) {
-			driver_data = &asustor_fs6700_driver_data;
-		} else {
-			for (i = 0; i < ARRAY_SIZE(asustor_systems); i++) {
-				struct asustor_driver_data *dd =
-					asustor_systems[i].driver_data;
-				if (dd && dd->name &&
-				    strcmp(force_device, dd->name) == 0) {
-					driver_data = dd;
-					break;
-				}
+		for (i = 0; i < ARRAY_SIZE(asustor_systems); i++) {
+			struct asustor_driver_data *dd =
+				asustor_systems[i].driver_data;
+			if (dd && dd->name &&
+			    strcmp(force_device, dd->name) == 0) {
+				driver_data = dd;
+				break;
 			}
-			if (driver_data == NULL) {
-				pr_err("force_device parameter set to invalid value \"%s\"!\n",
-				       force_device);
-				pr_info("  valid force_device values are: %s\n",
-				        VALID_OVERRIDE_NAMES);
-				return -EINVAL;
-			}
+		}
+		if (driver_data == NULL) {
+			pr_err("force_device parameter set to invalid value \"%s\"!\n",
+			       force_device);
+			pr_info("  valid force_device values are: %s\n",
+			        VALID_OVERRIDE_NAMES);
+			return -EINVAL;
 		}
 		pr_info("force_device parameter is set to \"%s\", treating your machine as "
 		        "that device instead of trying to detect it!\n",
 		        force_device);
-	} else { // try to detect the ASUSTOR device
-		system = dmi_first_match(asustor_systems);
+	} else { // try to detect the ASUSTOR system
+		system = find_matching_asustor_system();
 		if (!system) {
 			pr_info("No supported ASUSTOR mainboard found");
 			return -ENODEV;
 		}
 
 		driver_data = system->driver_data;
-
-		// figure out if this is really an AS67xx or instead a FS67xx ("Flashstor"),
-		// which has different LEDs and only supports m.2 SSDs (no SATA drives)
-		if (driver_data == &asustor_6700_driver_data) {
-			// this matches the "ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3
-			// Packet Switch" (rev 01) PCI bridge (vendor ID 0x1b21, device ID 0x2806
-			// aka 1b21:2806), which AFAIK is only used in Flashtor devices
-			// (though unfortunately we only had FS6712X and AS5402T to check)
-			// see also https://github.com/mafredri/asustor-platform-driver/pull/21#issuecomment-2420883171
-			// and following.
-			if (pci_get_device(0x1b21, 0x2806, NULL) != NULL) {
-				// TODO: if necessary, we could count those devices; the current
-				//       assumption is that even the bigger *A*S67xx (or AS54xx)
-				//       devices don't have this at all
-
-				driver_data = &asustor_fs6700_driver_data;
-			}
-		}
 
 		pr_info("Found %s or similar (%s/%s)\n", driver_data->name,
 		        system->matches[0].substr, system->matches[1].substr);
