@@ -34,8 +34,8 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - AS6104T (NOT TESTED!)
 - AS6204T
 - AS6602T, AS6604T (NOT TESTED!)
-- AS6702T, AS6704T
-- AS5402T, AS5404T
+- AS6702T, AS6704T, AS6706T
+- AS5402T, AS5404T (NOT TESTED!)
 - FS6706T (NOT TESTED!), FS6712X
 - .. possibly more, if they're similar enough.
 
