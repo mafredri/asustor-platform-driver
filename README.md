@@ -59,9 +59,9 @@ The following DMI system-manufacturer / system-product-name combinations are cur
 
 - LEDs (front panel, disk)
   - Represented as subdirectories in `/sys/class/leds/`
-    - In the subdirectories, you can set `brightness` to 0 or 1 to switch the LED off or on, for example  
-      `$ echo 1 | sudo tee blue:power/brightness`  
-      similarly, the `trigger` can be configured, see [below](#set-triggers-for-leds)
+    - In the subdirectories, you can set `brightness` to 0 or 1 to switch the LED off or on
+      (for example `echo 1 | sudo tee blue:power/brightness`). Similarly, the `trigger` can
+      also be configured, see [below](#set-triggers-for-leds).
     - Sometimes the name of an LED doesn't exactly represent its color, for example, on the
       *Flashstor FS6712X*, the `blue:lan` LED is actually purple when connected with 10GBit
       (but blue when connected with 1GBit). Also, sometimes two LEDs physically appear as one, so
@@ -154,6 +154,8 @@ echo r8169-0-200:00:link > /sys/class/leds/blue\:lan
 one being marked with square brackes (e.g. `[none]  kbd-scrolllock kbd-numlock kbd-capslock ...`).
 
 Note that currently the disk-related triggers (like `disk-activity`) do **not** work with NVME drives.
+That's a general limitation of the Linux kernel that is independent of this project.
+If this feature is ever implemented in the kernel, it will automatically work with this driver.
 
 ### `it87` and PWM polarity
 
@@ -168,19 +170,21 @@ Note that `it87` conflicts with `asustor-it87`, you may wish to add `it87` to th
 If the `asustor` kernel module doesn't detect your device correctly, you can force it to treat your
 ASUSTOR device as one of the supported devices by setting the `force_device` module parameter.
 
-can be used like:  
-`$ sudo modprobe asustor force_device=AS66xx`  
-or by creating an `/etc/modprobe.d/asustor.conf` text file with the following content:
+This can be done manually with `sudo modprobe asustor force_device=AS66xx`, or by creating
+`/etc/modprobe.d/asustor.conf` with the following content:
 
 ```
 # override device detection of the asustor kernel module
 options asustor force_device=FS67xx
 ```
 
-Of course you should replace "FS67xx" with the device you want to try, see the [Compatiblity](#compatibility)
-section above for how the `asustor` kernel module identifies devices, or  
-`$ sudo modinfo -p asustor`  
-which will print a short usage info including the currently supported device names for `force_device`.
+Please replace "FS67xx" with the device you want to try.  
+See the [Compatiblity](#compatibility)-section above for how the `asustor` kernel module identifies devices.
+Alternatively, can use the following command to print module parameters, including the currently supported device names for `force_device`:
+
+```console
+$ sudo modinfo -p asustor
+```
 
 _**NOTE:** If you need to use the `force_device` parameter to make your device work, please open an issue
 so the detection logic in the `asustor` kernel module can be fixed to properly support it._

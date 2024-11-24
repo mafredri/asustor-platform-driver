@@ -248,6 +248,10 @@ struct pci_device_match {
 	int16_t max_count; // how often that device should exist at most
 };
 
+enum {
+	DEVICE_COUNT_MAX = 0x7fff // INT16_MAX - used for "no upper limit"
+};
+
 // ASUSTOR Platform.
 struct asustor_driver_data {
 	const char *name; // used for force_device and for some log messages
@@ -268,8 +272,8 @@ static struct asustor_driver_data asustor_fs6700_driver_data = {
 	.pci_matches = {
 		// PCI bridge: ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch (rev 01)
 		// FS6712X seems to have 15 of these, no idea about FS6706T (so I keep min_count at 1)
-		// currently the upper limit doesn't matter so I just use 10000
-		{ 0x1b21, 0x2806, 1, 10000 },
+		// currently the upper limit doesn't matter so I just use DEVICE_COUNT_MAX
+		{ 0x1b21, 0x2806, 1, DEVICE_COUNT_MAX },
 	},
 	.leds = &asustor_fs6700_gpio_leds_lookup,
 	.keys = &asustor_fs6700_gpio_keys_lookup,
@@ -280,7 +284,8 @@ static struct asustor_driver_data asustor_6700_driver_data = {
 	// AS67xx needs to match PCI devices because it has the same DMI data as *F*S67xx
 	.pci_matches = {
 		// PCI bridge: ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch (rev 01)
-		// *F*S67xx seems to use these, I think *A*S67xx doesn't, so expect 0
+		// *F*S67xx seems to use these, *A*S67xx doesn't, so expect 0
+		// (BTW, AS6706T has 5x "ASM2812 6-Port PCIe x4 Gen3 Packet Switch" [1b21:2812], I hope *F*S6706T doesn't)
 		{ 0x1b21, 0x2806, 0, 0 },
 	},
 	.leds = &asustor_6700_gpio_leds_lookup,
@@ -319,7 +324,7 @@ static const struct dmi_system_id asustor_systems[] = {
 	// NOTE: each entry in this table must have its own unique asustor_driver_data
 	//       (having a unique .name) set as .driver_data
 	{
-		// Note: yes, this is the same DMI match as the next entry, because just by DMI,
+		// NOTE: yes, this is the same DMI match as the next entry, because just by DMI,
 		//       FS67xx and AS67xx can't be told apart. But our custom matching logic
 		//       in find_matching_asustor_system() also takes driver_data->pci_matches[]
 		//       into account, so that should be ok.
@@ -330,7 +335,7 @@ static const struct dmi_system_id asustor_systems[] = {
 		.driver_data = &asustor_fs6700_driver_data,
 	},
 	{
-		// Note: This not only matches (and works with) AS670xT (Lockerstor Gen2),
+		// NOTE: This not only matches (and works with) AS670xT (Lockerstor Gen2),
 		//       but also AS540xT (Nimbustor Gen2)
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
@@ -442,22 +447,28 @@ static bool dmi_matches(const struct dmi_system_id *dmi)
 	return true;
 }
 
-// how often does the PCI(e) device with given vendor/device IDs exist in this system?
+// How many PCI(e) devices with given vendor/device IDs exist in this system?
 static int count_pci_device_instances(unsigned int vendor, unsigned int device)
 {
-	// start with -1 as the do-while loop runs at least once even if nothing is found
-	int ret            = -1;
-	struct pci_dev *pd = NULL;
-	do {
+	int ret = 0;
+	struct pci_dev *pd, *last_pd = NULL;
+
+	while ((pd = pci_get_device(vendor, device, last_pd)) != NULL) {
+		if (last_pd) {
+			pci_dev_put(last_pd);
+		}
+		last_pd = pd;
 		++ret;
-		pd = pci_get_device(vendor, device, pd);
-	} while (pd != NULL);
+	}
+	if (last_pd) {
+		pci_dev_put(last_pd);
+	}
 	return ret;
 }
 
 // check if sys->pci_matches[] match with the PCI devices in the system
 // NOTE: this only checks if the devices in sys->pci_matches[] exist in the system
-//       with the expected count (or do *not* exist if the counts are 0),
+//       with the expected count (or the device does *not* exist if the counts are 0),
 //       PCI devices existing that aren't listed in sys->pci_matches[] is expected
 //       and does not make this function fail.
 static bool pci_devices_match(const struct asustor_driver_data *sys)
