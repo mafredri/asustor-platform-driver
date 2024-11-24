@@ -67,7 +67,7 @@ The following DMI system-manufacturer / system-product-name combinations are cur
       (but blue when connected with 1GBit). Also, sometimes two LEDs physically appear as one, so
       enabling both will create a third color (e.g. if both `nvme1:green` and `nvme1:red` are enabled,
       it will look orange).
-  - See [asustor.c](asustor.c).
+  - See [asustor_main.c](asustor_main.c).
 - Buttons
   - USB Copy Button
   - Power Button (AS6)

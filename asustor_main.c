@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * asustor.c - Platform driver for ASUSTOR NAS hardware
+ * asustor_main.c - main part of asustor.ko, a platform driver for ASUSTOR NAS hardware
+ *                  (the other part is in asustor_gpl2.c which is GPL-2.0-only)
  *
  * Copyright (C) 2021 Mathias Fredriksson <mafredri@gmail.com>
  */
@@ -408,45 +409,6 @@ static struct gpio_chip *find_chip_by_name(const char *name)
 }
 #endif
 
-/**
- *	dmi_matches - check if dmi_system_id structure matches system DMI data
- *	@dmi: pointer to the dmi_system_id structure to check
- */
-// copied from dmi_matches() in Linux 6.11.2 drivers/firmware/dmi_scan.c where it's private (static)
-// with only one small change (dmi_val = dmi_get_system_info(s) instead of dmi_ident[s])
-static bool dmi_matches(const struct dmi_system_id *dmi)
-{
-	int i;
-	const char *dmi_val;
-
-	for (i = 0; i < ARRAY_SIZE(dmi->matches); i++) {
-		int s = dmi->matches[i].slot;
-		if (s == DMI_NONE)
-			break;
-		if (s == DMI_OEM_STRING) {
-			/* DMI_OEM_STRING must be exact match */
-			const struct dmi_device *valid;
-
-			valid = dmi_find_device(DMI_DEV_TYPE_OEM_STRING,
-			                        dmi->matches[i].substr, NULL);
-			if (valid)
-				continue;
-		} else if ((dmi_val = dmi_get_system_info(s)) != NULL) {
-			if (dmi->matches[i].exact_match) {
-				if (!strcmp(dmi_val, dmi->matches[i].substr))
-					continue;
-			} else {
-				if (strstr(dmi_val, dmi->matches[i].substr))
-					continue;
-			}
-		}
-
-		/* No match */
-		return false;
-	}
-	return true;
-}
-
 // How many PCI(e) devices with given vendor/device IDs exist in this system?
 static int count_pci_device_instances(unsigned int vendor, unsigned int device)
 {
@@ -492,6 +454,10 @@ static bool pci_devices_match(const struct asustor_driver_data *sys)
 	return true;
 }
 
+// returns true if dmi->matches match on the current system
+// implemented in asustor_gpl2.c
+extern bool asustor_dmi_matches(const struct dmi_system_id *dmi);
+
 // find out which ASUSTOR system this is, based on asustor_systems[], including
 // their linked asustor_driver_data's pci_matches
 // returns NULL if this isn't a known system
@@ -509,7 +475,7 @@ static const struct dmi_system_id *find_matching_asustor_system(void)
 			break;
 		}
 
-		if (!dmi_matches(sys)) {
+		if (!asustor_dmi_matches(sys)) {
 			continue;
 		}
 
