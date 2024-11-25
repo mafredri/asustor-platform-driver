@@ -222,7 +222,10 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
 
 - Support variable amount of disk LEDs
 - ~~Create a new led trigger driver so that we can blink disk LEDs individually, the existing `disk-activity` trigger always blinks all LEDs on activity from any disk~~
-  - Pray that [[RFC PATCH v3 00/18] Add block device LED trigger](https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/) by Ian Pilcher lands in the linux kernel
+  - Pray that [[PATCH v13 0/2] Introduce block device LED trigger](https://lore.kernel.org/lkml/20221227225226.546489-1-arequipeno@gmail.com/T/#mc8758efa18e1b7ed51a50c298d881a2e91280b1f)
+    by Ian Pilcher lands in the linux kernel
+  - Pray that [[PATCH] nvme-pci: trigger disk activity LED](https://lore.kernel.org/lkml/4100a868-c5bd-91dd-0c45-a92fb1344b12@kernel.dk/T/)
+    by Enzo Matsumiya (or an alternative implementation that lets NVME disk activity trigger LEDs) lands in the linux kernel
 
 ## DKMS
 
