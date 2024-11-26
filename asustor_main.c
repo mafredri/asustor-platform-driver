@@ -391,21 +391,30 @@ static struct platform_device *__init asustor_create_pdev(const char *name,
 static int gpiochip_match_name(struct gpio_chip *chip, void *data)
 {
 	const char *name = data;
-
 	return !strcmp(chip->label, name);
 }
 
-static struct gpio_chip *find_chip_by_name(const char *name)
+// -1 means "not found"
+static int get_gpio_base_for_chipname(const char *name)
 {
-	return gpiochip_find((void *)name, gpiochip_match_name);
+	struct gpio_chip *gc = gpiochip_find((void *)name, gpiochip_match_name);
+	return (gc != NULL) ? gc->base : -1;
 }
 #else
 // DG: kernel 6.7 removed gpiochip_find() and introduced gpio_device_find()
 //     and friends instead
-static struct gpio_chip *find_chip_by_name(const char *name)
+
+// -1 means "not found"
+static int get_gpio_base_for_chipname(const char *name)
 {
+	int ret                 = -1;
 	struct gpio_device *dev = gpio_device_find_by_label(name);
-	return (dev != NULL) ? gpio_device_get_chip(dev) : NULL;
+	if (dev != NULL) {
+		ret = gpio_device_get_base(dev);
+		// make sure to decrement the reference count of dev
+		gpio_device_put(dev);
+	}
+	return ret;
 }
 #endif
 
@@ -549,12 +558,12 @@ static int __init asustor_init(void)
 		for (; keys_table->key != NULL; keys_table++) {
 			if (i == keys_table->idx) {
 				// add the GPIO chip's base, so we get the absolute (global) gpio number
-				struct gpio_chip *chip =
-					find_chip_by_name(keys_table->key);
-				if (chip == NULL)
+				const char *cn = keys_table->key;
+				int gpio_base  = get_gpio_base_for_chipname(cn);
+				if (gpio_base == -1)
 					continue;
 				asustor_gpio_keys_table[i].gpio =
-					chip->base + keys_table->chip_hwnum;
+					gpio_base + keys_table->chip_hwnum;
 			}
 		}
 	}
