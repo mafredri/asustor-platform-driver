@@ -113,7 +113,51 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 	},
 };
 
-static struct gpiod_lookup_table asustor_6700_gpio_leds_lookup = {
+static struct gpiod_lookup_table asustor_as6702_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		// 0: AS6702T and AS5402T don't have a front panel to illuminate
+		// 1: they don't have a LCD either
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  5, GPIO_ACTIVE_LOW),	// red:status
+		// 6
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL,  7, GPIO_ACTIVE_LOW),	// green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  9, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_HIGH),	// sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 12, GPIO_ACTIVE_LOW),	// sata2:red:disk
+		{}
+	},
+};
+
+static struct gpiod_lookup_table asustor_as6704_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL,  0, GPIO_ACTIVE_HIGH),	// power:front_panel
+		GPIO_LOOKUP_IDX(GPIO_IT87, 59, NULL,  1, GPIO_ACTIVE_HIGH),	// power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,  8, NULL,  3, GPIO_ACTIVE_LOW),	// red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87, 31, NULL,  4, GPIO_ACTIVE_LOW),	// green:status
+		GPIO_LOOKUP_IDX(GPIO_IT87, 49, NULL,  5, GPIO_ACTIVE_LOW),	// red:status
+		// 6
+		GPIO_LOOKUP_IDX(GPIO_IT87, 21, NULL,  7, GPIO_ACTIVE_LOW),	// green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87, 55, NULL,  8, GPIO_ACTIVE_HIGH),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL,  9, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 11, GPIO_ACTIVE_HIGH),	// sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 12, GPIO_ACTIVE_LOW),	// sata2:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 51, NULL, 13, GPIO_ACTIVE_HIGH),	// sata3:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 14, GPIO_ACTIVE_LOW),	// sata3:red:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 63, NULL, 15, GPIO_ACTIVE_HIGH),	// sata4:green:disk
+		GPIO_LOOKUP_IDX(GPIO_IT87, 48, NULL, 16, GPIO_ACTIVE_LOW),	// sata4:red:disk
+		{}
+	},
+};
+
+static struct gpiod_lookup_table asustor_as6706_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
 		GPIO_LOOKUP_IDX(GPIO_IT87, 29, NULL,  0, GPIO_ACTIVE_HIGH),	// power:front_panel
@@ -263,35 +307,99 @@ struct asustor_driver_data {
 	struct gpiod_lookup_table *keys;
 };
 
-#define VALID_OVERRIDE_NAMES "AS6xx, AS61xx, AS66xx, AS67xx, FS67xx"
+#define VALID_OVERRIDE_NAMES                                                   \
+	"AS6xx, AS61xx, AS66xx, AS6702, AS6704, AS6706, FS6706, FS6712"
 
 // NOTE: if you add another device here, update VALID_OVERRIDE_NAMES accordingly!
 
-static struct asustor_driver_data asustor_fs6700_driver_data = {
-	.name = "FS67xx",
-	// FS67xx needs to match PCI devices because it has the same DMI data as *A*S67xx
+/*
+ * Unfortunately, AS67xx and FS67xx can't be told apart by DMI, they all identify as
+ * "Intel Corporation" - "Jasper Lake Client Platform", so we need to match PCI devices.
+ *
+ * How to tell AS67xx and FS6xx apart:
+ *
+ * only AS6702T/AS5402T has [8086:4dd3] Intel Corporation Jasper Lake SATA AHCI Controller
+ * (only [AF]S67xx: [8086:4dc8] Intel Corporation Jasper Lake HD Audio
+ *  - but for now I think AS670xT vs AS540xT doesn't matter. Not sure if AS5404T has this; AS5402T doesn't)
+ *
+ * only AS6704T has [1b21:1164] ASMedia Technology Inc. ASM1164 Serial ATA AHCI Controller
+ * - TODO: does AS5404T also use this? until disproven, I assume it does
+ * only AS6706T has [1b21:1166] ASMedia Technology Inc. ASM1166 Serial ATA Controller
+ *
+ * only FS6712X has [1b21:2806] ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch
+ *              (it doesn't have any SATA controller)
+ * FS6706T does not have any SATA controller and no ASMedia PCIe packet switch either
+ */
+
+static struct asustor_driver_data asustor_as6702_driver_data = {
+	.name = "AS6702",
+	.pci_matches = {
+		// SATA controller [0106]: Intel Corporation Jasper Lake SATA AHCI Controller [8086:4dd3] (rev 01)
+		// Both AS6702T and AS5402T use this SATA controller (the other devices don't)
+		{ 0x8086, 0x4dd3, 1, 1 }
+	},
+	.leds = &asustor_as6702_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
+};
+
+static struct asustor_driver_data asustor_as6704_driver_data = {
+	.name = "AS6704",
+	.pci_matches = {
+		// SATA controller: ASMedia Technology Inc. ASM1164 Serial ATA AHCI Controller [1b21:1164] (rev 02)
+		// This SATA controller is used by AS6704T, and hopefully by AS5404T as well, but
+		// not by any of the other AS67xx or FS67xx devices
+		{ 0x1b21, 0x1164, 1, 1 }
+	},
+	.leds = &asustor_as6704_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
+};
+
+static struct asustor_driver_data asustor_as6706_driver_data = {
+	.name = "AS6706",
+	.pci_matches = {
+		// SATA controller [0106]: ASMedia Technology Inc. ASM1166 Serial ATA Controller [1b21:1166] (rev 02)
+		// only used by AS6706T; there (currently?) is no AS5406T
+		{ 0x1b21, 0x1166, 1, 1 }
+		// (BTW, AS6706T also has 5x "ASM2812 6-Port PCIe x4 Gen3 Packet Switch" [1b21:2812],
+		//  which thankfully is NOT the same one that FS6712 uses. Also it allows replacing the
+		//  m.2 NVME slots with a 10Gbit NIC, could be that then the packet switch goes away, IDK)
+	},
+	.leds = &asustor_as6706_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
+};
+
+static struct asustor_driver_data asustor_fs6712_driver_data = {
+	.name = "FS6712",
 	.pci_matches = {
 		// PCI bridge: ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch (rev 01)
-		// FS6712X seems to have 15 of these, no idea about FS6706T (so I keep min_count at 1)
-		// currently the upper limit doesn't matter so I just use DEVICE_COUNT_MAX
+		// apparently only FS6712X uses this - 15 of those turn up in lspci, at least if
+		// all m.2 NVME slots have a SSD installed. I guess it's safest to match that at least
+		// one of these exist; upper limit doesn't matter, so just use DEVICE_COUNT_MAX
 		{ 0x1b21, 0x2806, 1, DEVICE_COUNT_MAX },
 	},
 	.leds = &asustor_fs6700_gpio_leds_lookup,
 	.keys = &asustor_fs6700_gpio_keys_lookup,
 };
 
-static struct asustor_driver_data asustor_6700_driver_data = {
-	.name = "AS67xx",
-	// AS67xx needs to match PCI devices because it has the same DMI data as *F*S67xx
+static struct asustor_driver_data asustor_fs6706_driver_data = {
+	.name = "FS6706",
 	.pci_matches = {
-		// PCI bridge: ASMedia Technology Inc. ASM2806 4-Port PCIe x2 Gen3 Packet Switch (rev 01)
-		// *F*S67xx seems to use these, *A*S67xx doesn't, so expect 0
-		// (BTW, AS6706T has 5x "ASM2812 6-Port PCIe x4 Gen3 Packet Switch" [1b21:2812], I hope *F*S6706T doesn't)
+		// FS6706T doesn't have that ASMedia PCI bridge / PCIe Packet switch
 		{ 0x1b21, 0x2806, 0, 0 },
+		// .. it doesn't have any of the SATA controllers either
+		{ 0x8086, 0x4dd3, 0, 0 }, // .. not the Intel one used by AS6702T/AS5402T
+		{ 0x1b21, 0x1164, 0, 0 }, // .. neither the ASMedia one used by AS6704T
+		{ 0x1b21, 0x1166, 0, 0 }, // .. nor the ASMedia one used by AS6706T
 	},
-	.leds = &asustor_6700_gpio_leds_lookup,
-	.keys = &asustor_6100_gpio_keys_lookup,
+	.leds = &asustor_fs6700_gpio_leds_lookup,
+	.keys = &asustor_fs6700_gpio_keys_lookup,
 };
+
+/*
+ * It currently looks like the older systems are easier to tell apart, at least if one doesn't insist
+ * on detecting the 2 vs 4 vs 6 drives versions (I only did this for AS67xx because I had to do the
+ * advanced detection anyway)
+ */
 
 static struct asustor_driver_data asustor_6600_driver_data = {
 	// NOTE: This is (currently?) the same as for AS6700
@@ -300,7 +408,10 @@ static struct asustor_driver_data asustor_6600_driver_data = {
 	.name = "AS66xx",
 	// This (and the remaining systems) don't need to match PCI devices to be detected,
 	// so they're not set here (and thus initialized to all-zero)
-	.leds = &asustor_6700_gpio_leds_lookup,
+
+	// the LED GPIOs are the same as in AS67xx, so use the one from AS6704 which should work for
+	// both AS6602T and AS6604T (an AS66xx with more than 4 drives doesn't seem to exist)
+	.leds = &asustor_as6704_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
@@ -316,34 +427,61 @@ static struct asustor_driver_data asustor_600_driver_data = {
 	.keys = &asustor_600_gpio_keys_lookup,
 };
 
-// NOTE: Don't use this table with dmi_first_match(), because it has two entries that
-//       match the same (AS67xx and FS67xx). find_matching_asustor_system() handles
+// NOTE: Don't use this table with dmi_first_match(), because it has several entries that
+//       match the same (for AS67xx and FS67xx). find_matching_asustor_system() handles
 //       that by also matching PCI devices from asustor_driver_data::pci_matches.
 //       This table only exists in this form (instead of just using an array of
 //       asustor_driver_data) for MODULE_DEVICE_TABLE().
 static const struct dmi_system_id asustor_systems[] = {
 	// NOTE: each entry in this table must have its own unique asustor_driver_data
 	//       (having a unique .name) set as .driver_data
+
+	// The following devices all use the same DMI matches and are actually told apart by
+	// our custom matching logic in find_matching_asustor_system() also takes
+	// driver_data->pci_matches[] into account.
+	// See also the bigger comment above about AS67xx vs FS67xx
 	{
-		// NOTE: yes, this is the same DMI match as the next entry, because just by DMI,
-		//       FS67xx and AS67xx can't be told apart. But our custom matching logic
-		//       in find_matching_asustor_system() also takes driver_data->pci_matches[]
-		//       into account, so that should be ok.
+		// NOTE: This not only matches (and works with) AS6702T (Lockerstor Gen2),
+		//       but also AS5402T (Nimbustor Gen2)
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
 		},
-		.driver_data = &asustor_fs6700_driver_data,
+		.driver_data = &asustor_as6702_driver_data,
 	},
 	{
-		// NOTE: This not only matches (and works with) AS670xT (Lockerstor Gen2),
-		//       but also AS540xT (Nimbustor Gen2)
+		// NOTE: This not only matches (and works with) AS6704T (Lockerstor Gen2),
+		//       but (hopefully!) also AS5404T (Nimbustor Gen2)
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
 		},
-		.driver_data = &asustor_6700_driver_data,
+		.driver_data = &asustor_as6704_driver_data,
 	},
+	{
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+		},
+		.driver_data = &asustor_as6706_driver_data,
+	},
+	// *F*S67xx:
+	{
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+		},
+		.driver_data = &asustor_fs6706_driver_data,
+	},
+	{
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
+		},
+		.driver_data = &asustor_fs6712_driver_data,
+	},
+
+	// older devices can be matched only by DMI
 	{
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),

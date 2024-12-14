@@ -15,7 +15,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ### Optional
 
-- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX)
+- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX, FS67XX)
   - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
     and supports more variants of IT86XX and the IT87XX chips than the kernels `it87` driver.
     Support for timer-based blinking of up to two LEDs (only works on some models) has also been added.
@@ -52,8 +52,12 @@ The following DMI system-manufacturer / system-product-name combinations are cur
 * "Intel Corporation" / "Jasper Lake Client Platform"
     - These are the *Lockerstor Gen2* AS67xxT (AS6702T etc), *Nimbustor Gen2* AS54xxT (AS5402T etc)
       and *Flashstor* FS6706T/FS6712X devices.
-    - Identified by `asustor` kernel module as **"AS67xx"** for *Lockerstor Gen2* and *Nimbustor Gen2*
-    - **_or_** identified as **"FS67xx"** if it's a *Flashstor* device
+    - Identified by `asustor` kernel module as:
+        * **"AS6702"** for *Lockerstor Gen2* and *Nimbustor Gen2* with *two* SATA drives (AS6702T, AS5402T)
+        * **"AS6704"** for *Lockerstor Gen2* and *Nimbustor Gen2* with *four* SATA drives (AS6704T, AS5404T)
+        * **"AS6706"** for *Lockerstor Gen2* with *six* SATA drives (AS6706T)
+        * **"FS6706"** for *Flashtor* with *six* slots for m.2 NVME SSDs (FS6706T)
+        * **"FS6712"** for *Flashtor* with *twelve* slots for m.2 NVME SSDs (FS6712X)
 
 ## Features
 
@@ -175,10 +179,10 @@ This can be done manually with `sudo modprobe asustor force_device=AS66xx`, or b
 
 ```
 # override device detection of the asustor kernel module
-options asustor force_device=FS67xx
+options asustor force_device=FS6712
 ```
 
-Please replace "FS67xx" with the device you want to try.  
+Please replace "FS6712" with the device you want to try.  
 See the [Compatiblity](#compatibility)-section above for how the `asustor` kernel module identifies devices.
 Alternatively, can use the following command to print module parameters, including the currently supported device names for `force_device`:
 
