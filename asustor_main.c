@@ -83,6 +83,9 @@ static struct gpio_led asustor_leds[] = {
 	DISK_ERR_LED("sata6"),                                            // 20
 	NVME_ACT_LED("nvme1"),                                            // 21
 	NVME_ERR_LED("nvme1"),                                            // 22
+	{ .name = "red:side_inner", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 23
+	{ .name = "red:side_mid",   .default_state = LEDS_GPIO_DEFSTATE_ON }, // 24
+	{ .name = "red:side_outer", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 25
 };
 
 static const struct gpio_led_platform_data asustor_leds_pdata = {
@@ -93,10 +96,8 @@ static const struct gpio_led_platform_data asustor_leds_pdata = {
 static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
-										// Red LEDs to the left and right of the
-										// power button on the side of the unit
-		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL,  0, GPIO_ACTIVE_LOW),	// power:front_panel
-		// 1
+		// 0 - no front panel on this device
+		// 1 - no LCD either
 										// blue:power also controls the red LED
 										// inside the power button on the side
 		GPIO_LOOKUP_IDX(GPIO_IT87, 56, NULL,  2, GPIO_ACTIVE_LOW),	// blue:power
@@ -109,6 +110,10 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_leds_lookup = {
 		// LEDs 9 - 20 don't exist in this system
 		GPIO_LOOKUP_IDX(GPIO_IT87, 12, NULL, 21, GPIO_ACTIVE_LOW),	// nvme1:green:disk
 		GPIO_LOOKUP_IDX(GPIO_IT87, 13, NULL, 22, GPIO_ACTIVE_LOW),	// nvme1:red:disk
+		// red LED strip next to the power button on the side
+		GPIO_LOOKUP_IDX(GPIO_IT87, 46, NULL, 23, GPIO_ACTIVE_LOW),	// red:side_inner
+		GPIO_LOOKUP_IDX(GPIO_IT87, 47, NULL, 24, GPIO_ACTIVE_LOW),	// red:side_mid
+		GPIO_LOOKUP_IDX(GPIO_IT87, 52, NULL, 25, GPIO_ACTIVE_LOW),	// red:side_outer
 		{}
 	},
 };
