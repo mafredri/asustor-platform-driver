@@ -35,7 +35,7 @@
             meta = with lib; {
               description = "A kernel module to support ASUSTOR devices";
               homepage = "https://github.com/mafredri/asustor-platform-driver";
-              license = licenses.gpl3;
+              license = licenses.gpl2Plus;
               maintainers = [ ];
               platforms = platforms.linux;
             };
