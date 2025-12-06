@@ -3,7 +3,7 @@ KERNEL_MODULES := /lib/modules/$(TARGET)
 KERNEL_BUILD   := $(KERNEL_MODULES)/build
 SYSTEM_MAP     := /boot/System.map-$(TARGET)
 DRIVER         := asustor asustor_it87 asustor_gpio_it87
-DRIVER_VERSION := v0.1
+DRIVER_VERSION := v0.2
 #DRIVER_VERSION ?= $(shell git describe --long)
 
 # DKMS
@@ -17,6 +17,8 @@ asustor_gpio_it87_DEST_DIR = $(KERNEL_MODULES)/kernel/drivers/gpio
 
 obj-m  := $(patsubst %,%.o,$(DRIVER))
 obj-ko := $(patsubst %,%.ko,$(DRIVER))
+# asustor.o is built from two source files for license reasons
+asustor-y := asustor_main.o asustor_gpl2.o
 
 all: modules
 
@@ -38,8 +40,9 @@ dkms:
 	@mkdir -p $(DKMS_ROOT_PATH_ASUSTOR)
 	@echo "obj-m := asustor.o" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
 	@echo "obj-ko := asustor.ko" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
+	@echo "asustor-y := asustor_main.o asustor_gpl2.o" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
 	@cp dkms.conf $(DKMS_ROOT_PATH_ASUSTOR)
-	@cp asustor.c $(DKMS_ROOT_PATH_ASUSTOR)
+	@cp asustor_main.c asustor_gpl2.c $(DKMS_ROOT_PATH_ASUSTOR)
 	@sed -i -e '/^PACKAGE_VERSION=/ s/=.*/=\"$(DRIVER_VERSION)\"/' $(DKMS_ROOT_PATH_ASUSTOR)/dkms.conf
 
 	@mkdir -p $(DKMS_ROOT_PATH_ASUSTOR_IT87)

@@ -15,7 +15,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ### Optional
 
-- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX)
+- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX, FS67XX)
   - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
     and supports more variants of IT86XX and the IT87XX chips than the kernels `it87` driver.
     Support for timer-based blinking of up to two LEDs (only works on some models) has also been added.
@@ -34,21 +34,44 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - AS6104T (NOT TESTED!)
 - AS6204T
 - AS6602T, AS6604T (NOT TESTED!)
-- AS6702T, AS6704T
-- AS5402T, AS5404T
-- FS6706T (NOT TESTED!), FS6712X
+- AS6702T, AS6704T, AS6706T
+- AS5402T, AS5404T (NOT TESTED!)
+- FS6706T, FS6712X
 - .. possibly more, if they're similar enough.
-  The following DMI system-manufacturer / system-product-name combinations are currently supported
-  (see `sudo dmidecode -s system-manufacturer` and `sudo dmidecode -s system-product-name`):
-    - "ASUSTOR Inc." / "AS-6xxT"
-    - "Insyde" / "AS61xx"
-    - "Insyde" / "GeminiLake"
-    - "Intel Corporation" / "Jasper Lake Client Platform"
+
+The following DMI system-manufacturer / system-product-name combinations are currently supported
+(see `sudo dmidecode -s system-manufacturer` and `sudo dmidecode -s system-product-name`):
+* "ASUSTOR Inc." / "AS-6xxT"
+    - Identified by `asustor` kernel module as **"AS6xx"**
+* "Insyde" / "AS61xx"
+    - Identified by `asustor` kernel module as **"AS61xx"**
+* "Insyde" / "GeminiLake"
+    - These are the *Lockerstor* AS66xxT devices, like AS6604T
+        - *maybe also others like Nimbustor AS520xT?*
+    - Identified by `asustor` kernel module as **"AS66xx"**
+* "Intel Corporation" / "Jasper Lake Client Platform"
+    - These are the *Lockerstor Gen2* AS67xxT (AS6702T etc), *Nimbustor Gen2* AS54xxT (AS5402T etc)
+      and *Flashstor* FS6706T/FS6712X devices.
+    - Identified by `asustor` kernel module as:
+        * **"AS6702"** for *Lockerstor Gen2* and *Nimbustor Gen2* with *two* SATA drives (AS6702T, AS5402T)
+        * **"AS6704"** for *Lockerstor Gen2* and *Nimbustor Gen2* with *four* SATA drives (AS6704T, AS5404T)
+        * **"AS6706"** for *Lockerstor Gen2* with *six* SATA drives (AS6706T)
+        * **"FS6706"** for *Flashtor* with *six* slots for m.2 NVME SSDs (FS6706T)
+        * **"FS6712"** for *Flashtor* with *twelve* slots for m.2 NVME SSDs (FS6712X)
 
 ## Features
 
 - LEDs (front panel, disk)
-  - See [asustor.c](asustor.c).
+  - Represented as subdirectories in `/sys/class/leds/`
+    - In the subdirectories, you can set `brightness` to 0 or 1 to switch the LED off or on
+      (for example `echo 1 | sudo tee blue:power/brightness`). Similarly, the `trigger` can
+      also be configured, see [below](#set-triggers-for-leds).
+    - Sometimes the name of an LED doesn't exactly represent its color, for example, on the
+      *Flashstor FS6712X*, the `blue:lan` LED is actually purple when connected with 10GBit
+      (but blue when connected with 1GBit). Also, sometimes two LEDs physically appear as one, so
+      enabling both will create a third color (e.g. if both `nvme1:green` and `nvme1:red` are enabled,
+      it will look orange).
+  - See [asustor_main.c](asustor_main.c).
 - Buttons
   - USB Copy Button
   - Power Button (AS6)
@@ -134,6 +157,10 @@ echo r8169-0-200:00:link > /sys/class/leds/blue\:lan
 `cat /sys/class/leds/green\:usb/trigger` will list the available triggers, with the currently used
 one being marked with square brackes (e.g. `[none]  kbd-scrolllock kbd-numlock kbd-capslock ...`).
 
+Note that currently the disk-related triggers (like `disk-activity`) do **not** work with NVME drives.
+That's a general limitation of the Linux kernel that is independent of this project.
+If this feature is ever implemented in the kernel, it will automatically work with this driver.
+
 ### `it87` and PWM polarity
 
 This project includes a patched version of the `it87` module that is part of mainline kernel (`asustor-it87`). It skips PWM sanity checks for the fan because ASUSTOR firmware correctly initializes fans in active low polarity and can be used straight with `fancontrol` or similar tools.
@@ -141,6 +168,30 @@ This project includes a patched version of the `it87` module that is part of mai
 Note that `it87` conflicts with `asustor-it87`, you may wish to add `it87` to the module blocklist or explicitly load `asustor-it87` instead.
 
 ~~You may want to use [`patches/001-ignore-pwm-polarity-it87.patch`](patches/001-ignore-pwm-polarity-it87.patch) for the `it87` kernel module if it complains about PWM polarity. In this case, it's possible to use `fix_pwm_polarity=1`, however, it may reverse the polarity which is unwanted (i.e. high is low, low is high). It works fine when left as configured by the firmware.~~
+
+### Override detection of ASUSTOR device by `asustor` kernel module
+
+If the `asustor` kernel module doesn't detect your device correctly, you can force it to treat your
+ASUSTOR device as one of the supported devices by setting the `force_device` module parameter.
+
+This can be done manually with `sudo modprobe asustor force_device=AS66xx`, or by creating
+`/etc/modprobe.d/asustor.conf` with the following content:
+
+```
+# override device detection of the asustor kernel module
+options asustor force_device=FS6712
+```
+
+Please replace "FS6712" with the device you want to try.  
+See the [Compatibility](#compatibility)-section above for how the `asustor` kernel module identifies devices.
+Alternatively, can use the following command to print module parameters, including the currently supported device names for `force_device`:
+
+```console
+$ sudo modinfo -p asustor
+```
+
+_**NOTE:** If you need to use the `force_device` parameter to make your device work, please open an issue
+so the detection logic in the `asustor` kernel module can be fixed to properly support it._
 
 ### Misc
 
@@ -166,6 +217,7 @@ sudo dmidecode -s bios-version
 sudo dmidecode -s bios-release-date
 sudo dmidecode -s bios-revision
 sudo gpioinfo
+sudo lspci -nn -PP
 ```
 
 NOTE: If `gpioinfo` does not return anything, you may need to figure out which (if any) gpio drivers to load. Also keep in mind that your distribution may not ship with all `gpio-` drivers, so you may need to compile them yourself.
@@ -174,7 +226,10 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
 
 - Support variable amount of disk LEDs
 - ~~Create a new led trigger driver so that we can blink disk LEDs individually, the existing `disk-activity` trigger always blinks all LEDs on activity from any disk~~
-  - Pray that [[RFC PATCH v3 00/18] Add block device LED trigger](https://lore.kernel.org/linux-leds/20210819025053.222710-1-arequipeno@gmail.com/) by Ian Pilcher lands in the linux kernel
+  - Pray that [[PATCH v13 0/2] Introduce block device LED trigger](https://lore.kernel.org/lkml/20221227225226.546489-1-arequipeno@gmail.com/T/#mc8758efa18e1b7ed51a50c298d881a2e91280b1f)
+    by Ian Pilcher lands in the linux kernel
+  - Pray that [[PATCH] nvme-pci: trigger disk activity LED](https://lore.kernel.org/lkml/4100a868-c5bd-91dd-0c45-a92fb1344b12@kernel.dk/T/)
+    by Enzo Matsumiya (or an alternative implementation that lets NVME disk activity trigger LEDs) lands in the linux kernel
 
 ## DKMS
 
