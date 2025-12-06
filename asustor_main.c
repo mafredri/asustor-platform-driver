@@ -649,7 +649,6 @@ MODULE_PARM_DESC(
 	"Don't try to detect ASUSTOR device, use the given one instead. "
 	"Valid values: " VALID_OVERRIDE_NAMES);
 
-// TODO(mafredri): Allow force model for testing.
 static int __init asustor_init(void)
 {
 	const struct dmi_system_id *system;
