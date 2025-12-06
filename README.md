@@ -183,7 +183,7 @@ options asustor force_device=FS6712
 ```
 
 Please replace "FS6712" with the device you want to try.  
-See the [Compatiblity](#compatibility)-section above for how the `asustor` kernel module identifies devices.
+See the [Compatibility](#compatibility)-section above for how the `asustor` kernel module identifies devices.
 Alternatively, can use the following command to print module parameters, including the currently supported device names for `force_device`:
 
 ```console
