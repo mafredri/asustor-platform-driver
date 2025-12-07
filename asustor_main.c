@@ -24,6 +24,8 @@
 #define GPIO_IT87 "asustor_gpio_it87"
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
+#define GPIO_AS6300 "INT3452:00"
+#define GPIO_AS5304 "INT3453:02"
 
 #define DISK_ACT_LED(_name)                                                    \
 	{                                                                      \
@@ -190,6 +192,53 @@ static struct gpiod_lookup_table asustor_as6706_gpio_leds_lookup = {
 	},
 };
 
+static struct gpiod_lookup_table asustor_6300_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		GPIO_LOOKUP_IDX(GPIO_IT87,   29, NULL,  0, GPIO_ACTIVE_HIGH), // power:front_panel
+		GPIO_LOOKUP_IDX(GPIO_IT87,   59, NULL,  1, GPIO_ACTIVE_HIGH), // power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87,   56, NULL,  2, GPIO_ACTIVE_LOW),  // blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,    8, NULL,  3, GPIO_ACTIVE_LOW),  // red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,   31, NULL,  4, GPIO_ACTIVE_LOW),  // green:status
+		GPIO_LOOKUP_IDX(GPIO_AS6300, 20, NULL,  5, GPIO_ACTIVE_HIGH), // red:status
+		// 6
+		GPIO_LOOKUP_IDX(GPIO_IT87,   21, NULL,  7, GPIO_ACTIVE_LOW),  // green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87,   55, NULL,  8, GPIO_ACTIVE_HIGH), // blue:lan
+
+		GPIO_LOOKUP_IDX(GPIO_AS6300, 23, NULL,  9, GPIO_ACTIVE_HIGH), // sata1:green:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS6300, 24, NULL, 10, GPIO_ACTIVE_HIGH), // sata1:red:disk 	++
+		GPIO_LOOKUP_IDX(GPIO_AS6300, 22, NULL, 11, GPIO_ACTIVE_HIGH), // sata2:green:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS6300, 21, NULL, 12, GPIO_ACTIVE_HIGH), // sata2:red:disk 	++
+		{}
+		// GPIO_LOOKUP_IDX(GPIO_IT87,   53, NULL, 15, GPIO_ACTIVE_HIGH), // beep:status <<-- It can beep too!!!
+	},
+};
+
+static struct gpiod_lookup_table asustor_5304_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		GPIO_LOOKUP_IDX(GPIO_IT87,   29, NULL,  0, GPIO_ACTIVE_HIGH), // power:front_panel
+		GPIO_LOOKUP_IDX(GPIO_IT87,   59, NULL,  1, GPIO_ACTIVE_HIGH), // power:lcd
+		GPIO_LOOKUP_IDX(GPIO_IT87,   56, NULL,  2, GPIO_ACTIVE_LOW),  // blue:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,    8, NULL,  3, GPIO_ACTIVE_LOW),  // red:power
+		GPIO_LOOKUP_IDX(GPIO_IT87,   31, NULL,  4, GPIO_ACTIVE_LOW),  // green:status
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 20, NULL,  5, GPIO_ACTIVE_HIGH), // red:status
+		//GPIO_LOOKUP_IDX(GPIO_IT87,   21, NULL,  6, GPIO_ACTIVE_LOW),  // blue:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87,   21, NULL,  7, GPIO_ACTIVE_LOW),  // green:usb
+		GPIO_LOOKUP_IDX(GPIO_IT87,   55, NULL,  8, GPIO_ACTIVE_HIGH), // blue:lan
+
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 1,  NULL,  9, GPIO_ACTIVE_HIGH), // sata1:green:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 9,  NULL, 10, GPIO_ACTIVE_LOW),  // sata1:red:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 2,  NULL, 11, GPIO_ACTIVE_HIGH), // sata2:green:disk 	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 10, NULL, 12, GPIO_ACTIVE_LOW),  // sata2:red:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 4,  NULL, 13, GPIO_ACTIVE_HIGH), // sata3:green:disk 	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 11, NULL, 14, GPIO_ACTIVE_LOW),  // sata3:red:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 6,  NULL, 15, GPIO_ACTIVE_HIGH), // sata4:green:disk	++
+		GPIO_LOOKUP_IDX(GPIO_AS5304, 13, NULL, 16, GPIO_ACTIVE_LOW),  // sata4:red:disk 	++
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
@@ -313,7 +362,7 @@ struct asustor_driver_data {
 };
 
 #define VALID_OVERRIDE_NAMES                                                   \
-	"AS6xx, AS61xx, AS66xx, AS6702, AS6704, AS6706, FS6706, FS6712"
+	"AS53xx, AS6xx, AS61xx, AS63xx, AS66xx, AS6702, AS6704, AS6706, FS6706, FS6712"
 
 // NOTE: if you add another device here, update VALID_OVERRIDE_NAMES accordingly!
 
@@ -401,22 +450,49 @@ static struct asustor_driver_data asustor_fs6706_driver_data = {
 };
 
 /*
+ * AS66xx and AS5304 (maybe all 53xx?) can't be told apart just by DMI either,
+ * (both are "Insyde" "GeminiLake"), so we need to match PCI IDs here as well
+ */
+static struct asustor_driver_data asustor_5304_driver_data = {
+	.name = "AS53xx",
+	.pci_matches = {
+		// ASMedia ASM2806 4-Port PCIe x2 Gen3 Packet Switch
+		// (does NOT exist here, but on AS602T and AS604T)
+		{ 0x1b21, 0x2806, 0, 0 }
+	},
+	.leds = &asustor_5304_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
+};
+
+static struct asustor_driver_data asustor_6600_driver_data = {
+	.name = "AS66xx",
+	.pci_matches = {
+		// ASMedia ASM2806 4-Port PCIe x2 Gen3 Packet Switch
+		// (exists on AS602T and AS604T, but not AS5304T)
+		// in the lspci outputs I've seen both had 5 such devices,
+		// but let's be a bit more flexible here..
+		{ 0x1b21, 0x2806, 3, DEVICE_COUNT_MAX }
+	},
+	// NOTE: This is (currently?) the same as for AS6700
+	//       because it seems to use the same GPIO numbers,
+	//       but listed extra for the different name
+	// the LED GPIOs are the same as in AS67xx, so use the one from AS6704 which should work for
+	// both AS6602T and AS6604T (an AS66xx with more than 4 drives doesn't seem to exist)
+	.leds = &asustor_as6704_gpio_leds_lookup,
+	.keys = &asustor_6100_gpio_keys_lookup,
+};
+
+/*
  * It currently looks like the older systems are easier to tell apart, at least if one doesn't insist
  * on detecting the 2 vs 4 vs 6 drives versions (I only did this for AS67xx because I had to do the
  * advanced detection anyway)
  */
 
-static struct asustor_driver_data asustor_6600_driver_data = {
-	// NOTE: This is (currently?) the same as for AS6700
-	//       because it seems to use the same GPIO numbers,
-	//       but listed extra for the different name
-	.name = "AS66xx",
+static struct asustor_driver_data asustor_6300_driver_data = {
+	.name = "AS63xx",
 	// This (and the remaining systems) don't need to match PCI devices to be detected,
 	// so they're not set here (and thus initialized to all-zero)
-
-	// the LED GPIOs are the same as in AS67xx, so use the one from AS6704 which should work for
-	// both AS6602T and AS6604T (an AS66xx with more than 4 drives doesn't seem to exist)
-	.leds = &asustor_as6704_gpio_leds_lookup,
+	.leds = &asustor_6300_gpio_leds_lookup,
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
@@ -485,14 +561,31 @@ static const struct dmi_system_id asustor_systems[] = {
 		},
 		.driver_data = &asustor_fs6712_driver_data,
 	},
-
-	// older devices can be matched only by DMI
+	// AS5304T and AS660[24]T use the same DMI matches, but can be told apart with the pci matches
 	{
+		// AS5304
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
+		},
+		.driver_data = &asustor_5304_driver_data,
+	},
+	{
+		// AS66xx
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Insyde"),
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "GeminiLake"),
 		},
 		.driver_data = &asustor_6600_driver_data,
+	},
+	// older devices can be matched only by DMI
+	{
+		// AS 63xx
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Apollolake I Platform")
+		},
+		.driver_data = &asustor_6300_driver_data,
 	},
 	{
 		.matches = {
