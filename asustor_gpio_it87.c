@@ -20,6 +20,7 @@
 #include <linux/ioport.h>
 #include <linux/slab.h>
 #include <linux/gpio/driver.h>
+#include <linux/version.h> // for LINUX_VERSION_CODE and KERNEL_VERSION()
 
 /* Chip Id numbers */
 #define NO_DEV_ID	0xffff
@@ -214,8 +215,14 @@ exit:
 	return rc;
 }
 
+// DG: from Kernel 6.17 on, the set callback must return int (0 for success)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+static int it87_gpio_set(struct gpio_chip *chip,
+			  unsigned gpio_num, int val)
+#else
 static void it87_gpio_set(struct gpio_chip *chip,
 			  unsigned gpio_num, int val)
+#endif
 {
 	u8 mask, curr_vals;
 	u16 reg;
@@ -229,6 +236,10 @@ static void it87_gpio_set(struct gpio_chip *chip,
 		outb(curr_vals | mask, reg);
 	else
 		outb(curr_vals & ~mask, reg);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+	return 0;
+#endif
 }
 
 static int it87_gpio_direction_out(struct gpio_chip *chip,
