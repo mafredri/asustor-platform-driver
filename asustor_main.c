@@ -457,7 +457,7 @@ static struct asustor_driver_data asustor_5304_driver_data = {
 	.name = "AS53xx",
 	.pci_matches = {
 		// ASMedia ASM2806 4-Port PCIe x2 Gen3 Packet Switch
-		// (does NOT exist here, but on AS602T and AS604T)
+		// (does NOT exist here, but on AS6602T and AS6604T)
 		{ 0x1b21, 0x2806, 0, 0 }
 	},
 	.leds = &asustor_5304_gpio_leds_lookup,
@@ -468,7 +468,7 @@ static struct asustor_driver_data asustor_6600_driver_data = {
 	.name = "AS66xx",
 	.pci_matches = {
 		// ASMedia ASM2806 4-Port PCIe x2 Gen3 Packet Switch
-		// (exists on AS602T and AS604T, but not AS5304T)
+		// (exists on AS6602T and AS6604T, but not AS5304T)
 		// in the lspci outputs I've seen both had 5 such devices,
 		// but let's be a bit more flexible here..
 		{ 0x1b21, 0x2806, 3, DEVICE_COUNT_MAX }
@@ -484,8 +484,8 @@ static struct asustor_driver_data asustor_6600_driver_data = {
 
 /*
  * It currently looks like the older systems are easier to tell apart, at least if one doesn't insist
- * on detecting the 2 vs 4 vs 6 drives versions (I only did this for AS67xx because I had to do the
- * advanced detection anyway)
+ * on detecting the 2 vs 4 vs 6 drives versions (this was only done for AS67xx because there the
+ * advanced detection had to be done anyway)
  */
 
 static struct asustor_driver_data asustor_6300_driver_data = {
@@ -580,10 +580,10 @@ static const struct dmi_system_id asustor_systems[] = {
 	},
 	// older devices can be matched only by DMI
 	{
-		// AS 63xx
+		// AS63xx
 		.matches = {
 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
-			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Apollolake I Platform")
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Apollolake I Platform"),
 		},
 		.driver_data = &asustor_6300_driver_data,
 	},
