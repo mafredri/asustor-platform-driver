@@ -21,9 +21,13 @@
 #include <linux/platform_device.h>
 #include <linux/version.h>
 
+#include "asustor_lcm.h"
+#include "asustor_mcu.h"
+
 #define GPIO_IT87 "asustor_gpio_it87"
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
+#define GPIO_AMD_FCH "AMDI0030:00"
 
 #define DISK_ACT_LED(_name)                                                    \
 	{                                                                      \
@@ -190,6 +194,34 @@ static struct gpiod_lookup_table asustor_as6706_gpio_leds_lookup = {
 	},
 };
 
+static struct gpiod_lookup_table asustor_as6806_gpio_leds_lookup = {
+	.dev_id = "leds-gpio",
+	.table = {
+		// 0: power:front_panel — controlled by embedded controller (not GPIO)
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,   4, NULL,  1, GPIO_ACTIVE_HIGH),	// power:lcd
+		// 2: blue:power — controlled by embedded controller (not GPIO)
+		// 3: red:power — controlled by embedded controller (not GPIO)
+		// 4: green:status — controlled by embedded controller (not GPIO)
+		// 5: red:status — controlled by embedded controller (not GPIO)
+		// 6: blue:usb — N/A
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 147, NULL,  7, GPIO_ACTIVE_HIGH),	// green:usb (backup button LED)
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 148, NULL,  8, GPIO_ACTIVE_LOW),	// blue:lan
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,  69, NULL,  9, GPIO_ACTIVE_HIGH),	// sata1:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,  68, NULL, 10, GPIO_ACTIVE_LOW),	// sata1:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,  75, NULL, 11, GPIO_ACTIVE_HIGH),	// sata2:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,  74, NULL, 12, GPIO_ACTIVE_LOW),	// sata2:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,  79, NULL, 13, GPIO_ACTIVE_HIGH),	// sata3:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH,  78, NULL, 14, GPIO_ACTIVE_LOW),	// sata3:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 106, NULL, 15, GPIO_ACTIVE_HIGH),	// sata4:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 107, NULL, 16, GPIO_ACTIVE_LOW),	// sata4:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 146, NULL, 17, GPIO_ACTIVE_LOW),	// sata5:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 145, NULL, 18, GPIO_ACTIVE_HIGH),	// sata5:red:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 154, NULL, 19, GPIO_ACTIVE_HIGH),	// sata6:green:disk
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 156, NULL, 20, GPIO_ACTIVE_LOW),	// sata6:red:disk
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_leds_lookup = {
 	.dev_id = "leds-gpio",
 	.table = {
@@ -267,6 +299,17 @@ static struct gpiod_lookup_table asustor_fs6700_gpio_keys_lookup = {
 	},
 };
 
+static struct gpiod_lookup_table asustor_as6806_gpio_keys_lookup = {
+	.dev_id = "gpio-keys-polled",
+	.table = {
+		GPIO_LOOKUP_IDX(GPIO_AMD_FCH, 89, NULL, 0, GPIO_ACTIVE_LOW),
+		// Front panel LCD navigation buttons (1-4 + enter) are driven
+		// by an embedded controller, not directly via GPIO.
+		// Power Button is already handled properly via ACPI.
+		{}
+	},
+};
+
 static struct gpiod_lookup_table asustor_6100_gpio_keys_lookup = { // same for 6700
 	.dev_id = "gpio-keys-polled",
 	.table = {
@@ -313,7 +356,7 @@ struct asustor_driver_data {
 };
 
 #define VALID_OVERRIDE_NAMES                                                   \
-	"AS6xx, AS61xx, AS66xx, AS6702, AS6704, AS6706, FS6706, FS6712"
+	"AS6xx, AS61xx, AS66xx, AS6702, AS6704, AS6706, AS6806, FS6706, FS6712"
 
 // NOTE: if you add another device here, update VALID_OVERRIDE_NAMES accordingly!
 
@@ -384,6 +427,17 @@ static struct asustor_driver_data asustor_fs6712_driver_data = {
 	},
 	.leds = &asustor_fs6700_gpio_leds_lookup,
 	.keys = &asustor_fs6700_gpio_keys_lookup,
+};
+
+static struct asustor_driver_data asustor_as6806_driver_data = {
+	.name = "AS6806",
+	.pci_matches = {
+		// SATA controller [0106]: ASMedia Technology Inc. ASM1166 Serial ATA Controller [1b21:1166]
+		// Same PCI device as AS6706T, but distinguished by DMI vendor (AMD vs Intel Corporation)
+		{ 0x1b21, 0x1166, 1, 1 }
+	},
+	.leds = &asustor_as6806_gpio_leds_lookup,
+	.keys = &asustor_as6806_gpio_keys_lookup,
 };
 
 static struct asustor_driver_data asustor_fs6706_driver_data = {
@@ -484,6 +538,15 @@ static const struct dmi_system_id asustor_systems[] = {
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Jasper Lake Client Platform"),
 		},
 		.driver_data = &asustor_fs6712_driver_data,
+	},
+
+	// AS68xx (LockerStor Gen3) - AMD Rembrandt platform
+	{
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "AMD"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Rembrandt"),
+		},
+		.driver_data = &asustor_as6806_driver_data,
 	},
 
 	// older devices can be matched only by DMI
@@ -727,6 +790,19 @@ static int __init asustor_init(void)
 		goto err;
 	}
 
+	/* Initialize MCU for models that use it (AS68xx) */
+	ret = asustor_mcu_init(driver_data->name);
+	if (ret) {
+		pr_warn("MCU init failed: %d (non-fatal)\n", ret);
+		/* Non-fatal — GPIO LEDs and buttons still work */
+	}
+
+	/* Initialize front-panel LCD module (AS6806T) */
+	ret = asustor_lcm_init(driver_data->name);
+	if (ret) {
+		pr_warn("LCM init failed: %d (non-fatal)\n", ret);
+	}
+
 	return 0;
 
 err:
@@ -737,6 +813,9 @@ err:
 
 static void __exit asustor_cleanup(void)
 {
+	asustor_lcm_cleanup();
+	asustor_mcu_cleanup();
+
 	platform_device_unregister(asustor_leds_pdev);
 	platform_device_unregister(asustor_keys_pdev);
 
@@ -751,6 +830,7 @@ MODULE_AUTHOR("Mathias Fredriksson <mafredri@gmail.com>");
 MODULE_DESCRIPTION("Platform driver for ASUSTOR NAS hardware");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:asustor");
-MODULE_SOFTDEP("pre: asustor-it87 asustor-gpio-it87 gpio-ich"
+MODULE_SOFTDEP("pre: asustor-it87 asustor-gpio-it87 gpio-ich pinctrl-amd"
                " platform:leds-gpio"
-               " platform:gpio-keys-polled");
+               " platform:gpio-keys-polled"
+               " ledtrig-timer");

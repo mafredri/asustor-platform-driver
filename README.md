@@ -37,6 +37,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - AS6702T, AS6704T, AS6706T
 - AS5402T, AS5404T (NOT TESTED!)
 - FS6706T, FS6712X
+- AS6806T (Gen3, AMD Rembrandt)
 - .. possibly more, if they're similar enough.
 
 The following DMI system-manufacturer / system-product-name combinations are currently supported
@@ -58,6 +59,11 @@ The following DMI system-manufacturer / system-product-name combinations are cur
         * **"AS6706"** for *Lockerstor Gen2* with *six* SATA drives (AS6706T)
         * **"FS6706"** for *Flashtor* with *six* slots for m.2 NVME SSDs (FS6706T)
         * **"FS6712"** for *Flashtor* with *twelve* slots for m.2 NVME SSDs (FS6712X)
+* "AMD" / "Rembrandt"
+    - These are the *Lockerstor Gen3* AS68xxT devices, like AS6806T
+    - Uses AMD FCH GPIO (`AMDI0030:00`) instead of IT87, and an onboard MCU for fan control and status LEDs
+    - Identified by `asustor` kernel module as:
+        * **"AS6806"** for *Lockerstor Gen3* with *six* SATA drives (AS6806T)
 
 ## Features
 
@@ -75,9 +81,35 @@ The following DMI system-manufacturer / system-product-name combinations are cur
 - Buttons
   - USB Copy Button
   - Power Button (AS6)
+  - LCD Navigation Buttons (AS6806T) — 4 buttons (Up, Down, Back, Enter) next to the front-panel LCD
 - Power (`/sys/class/leds/power:*`)
   - LCD
   - Front panel
+
+### AS6806T (Gen3) Specific Features
+
+The AS6806T uses a different hardware architecture (AMD Rembrandt) from the Intel-based models.
+It does **not** use an IT87 chip — the `asustor-it87` and `asustor-gpio-it87` modules are not needed.
+
+- **GPIO**: AMD FCH (`AMDI0030:00`, `pinctrl-amd` kernel driver). No custom GPIO driver needed.
+- **Fan control**: Via onboard MCU over serial (`/dev/ttyS1`). Exposed at `/sys/class/hwmon/hwmon*/pwm1`.
+  Fan RPM is also read via the MCU and exposed at `/sys/class/hwmon/hwmon*/fan1_input`.
+- **MCU-controlled LEDs**: Power LED (blue + red) and status LED (green + red) are controlled by
+  the MCU, not GPIO. Exposed as `/sys/class/leds/blue:power`, `red:power`, `green:status`, `red:status`.
+- **Front-panel LCD**: 16×2 character display controlled via serial (`/dev/ttyS2`). Requires GPIO
+  power (`power:lcd` LED). Exposed via sysfs:
+  - `/sys/devices/platform/asustor_lcm/lcd_line0` — write top line (max 16 chars)
+  - `/sys/devices/platform/asustor_lcm/lcd_line1` — write bottom line (max 16 chars)
+  - `/sys/devices/platform/asustor_lcm/lcd_clear` — clear display (write `1`)
+- **LCD Navigation Buttons**: 4 buttons arranged in a 2×2 grid next to the LCD. Reported as a
+  Linux input device (`ASUSTOR LCD Buttons`). The buttons are part of the LCD module and
+  communicate via the same serial port (`/dev/ttyS2`). Use `evtest` to monitor events.
+  - ↑ Up → `KEY_UP`
+  - ↓ Down → `KEY_DOWN`
+  - ← Back → `KEY_ESC`
+  - ↵ Enter → `KEY_ENTER`
+- **Temperature**: Use `nct7802` kernel module (`modprobe nct7802`) for temperature sensors via
+  I2C (bus 1, address 0x2E). Also: `k10temp` for CPU temperature.
 
 ## Installation
 
