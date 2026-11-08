@@ -30,7 +30,7 @@ CI runs `.github/scripts/checkpatch-range.sh` on every commit in a pull request,
 .github/scripts/checkpatch-range.sh <linux>/scripts/checkpatch.pl <base> HEAD
 ```
 
-The script ignores `LINUX_VERSION_CODE` (version guards, which also trip `CONSTANT_COMPARISON`) and `FILE_PATH_CHANGES` (asks about MAINTAINERS updates). Still put the constant on the right in ordinary comparisons. Fix everything else in lines you add. Run `checkpatch.pl --strict` as well and fix what is reasonable; CI does not enforce it.
+The script ignores `LINUX_VERSION_CODE` (version guards, which also trip `CONSTANT_COMPARISON`), `FILE_PATH_CHANGES` (asks about MAINTAINERS updates) and `UNKNOWN_COMMIT_ID` (commits cited from upstream are not in this repository); it checks that every `Fixes:` ID is a commit here instead. Still put the constant on the right in ordinary comparisons. Fix everything else in lines you add. Run `checkpatch.pl --strict` as well and fix what is reasonable; CI does not enforce it.
 
 ## Kernel compatibility
 
