@@ -3,83 +3,87 @@ KERNEL_MODULES := /lib/modules/$(TARGET)
 KERNEL_BUILD   := $(KERNEL_MODULES)/build
 SYSTEM_MAP     := /boot/System.map-$(TARGET)
 DRIVER         := asustor asustor_it87 asustor_gpio_it87
-DRIVER_VERSION := v0.2
-#DRIVER_VERSION ?= $(shell git describe --long)
 
-# DKMS
-DKMS_ROOT_PATH_ASUSTOR=/usr/src/asustor-$(DRIVER_VERSION)
-DKMS_ROOT_PATH_ASUSTOR_IT87=/usr/src/asustor-it87-$(DRIVER_VERSION)
-DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87=/usr/src/asustor-gpio-it87-$(DRIVER_VERSION)
+# DKMS package; dkms.conf holds the version.
+PACKAGE_NAME    := asustor-platform-driver
+PACKAGE_VERSION := $(shell sed -n 's/^PACKAGE_VERSION="\(.*\)"$$/\1/p' dkms.conf)
+DKMS_SOURCE     := /usr/src/$(PACKAGE_NAME)-$(PACKAGE_VERSION)
+DKMS_FILES      := Kbuild dkms.conf $(wildcard *.c)
+# Before 0.3.0, `make dkms` installed one DKMS package per module.
+DKMS_PACKAGES   := $(PACKAGE_NAME) asustor asustor-it87 asustor-gpio-it87
 
 asustor_DEST_DIR      = $(KERNEL_MODULES)/kernel/drivers/platform/x86
 asustor_it87_DEST_DIR = $(KERNEL_MODULES)/kernel/drivers/hwmon
 asustor_gpio_it87_DEST_DIR = $(KERNEL_MODULES)/kernel/drivers/gpio
-
-obj-m  := $(patsubst %,%.o,$(DRIVER))
-obj-ko := $(patsubst %,%.ko,$(DRIVER))
-# asustor.o is built from two source files for license reasons
-asustor-y := asustor_main.o asustor_gpl2.o
 
 all: modules
 
 modules:
 	@$(MAKE) -C $(KERNEL_BUILD) M=$(CURDIR) modules
 
-install: modules_modules
-
-modules_modules:
+install:
 	$(foreach mod,$(DRIVER),install -m 644 -D $(mod).ko $($(mod)_DEST_DIR)/$(mod).ko;)
+	depmod -a -F $(SYSTEM_MAP) $(TARGET)
+
+uninstall:
+	$(foreach mod,$(DRIVER),rm -f $($(mod)_DEST_DIR)/$(mod).ko;)
 	depmod -a -F $(SYSTEM_MAP) $(TARGET)
 
 clean:
 	$(MAKE) -C $(KERNEL_BUILD) M=$(CURDIR) clean
 
-.PHONY: all modules install modules_install clean
+# Installs the modules through DKMS for $(TARGET); AUTOINSTALL rebuilds them
+# for kernels installed later. Replaces any version installed before, after
+# checking the version so a bad dkms.conf cannot remove a working install.
+dkms_install:
+	@[ -n "$(PACKAGE_VERSION)" ] || { \
+		echo "No PACKAGE_VERSION=\"x.y.z\" line in dkms.conf; run make in the repository root." >&2; \
+		exit 1; \
+	}
+	@$(MAKE) --no-print-directory dkms_remove
+	mkdir -p $(DKMS_SOURCE)
+	cp $(DKMS_FILES) $(DKMS_SOURCE)
+	dkms add -m $(PACKAGE_NAME) -v $(PACKAGE_VERSION)
+	dkms build -m $(PACKAGE_NAME) -v $(PACKAGE_VERSION) -k $(TARGET)
+	dkms install -m $(PACKAGE_NAME) -v $(PACKAGE_VERSION) -k $(TARGET)
 
-dkms:
-	@mkdir -p $(DKMS_ROOT_PATH_ASUSTOR)
-	@echo "obj-m := asustor.o" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
-	@echo "obj-ko := asustor.ko" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
-	@echo "asustor-y := asustor_main.o asustor_gpl2.o" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
-	@cp dkms.conf $(DKMS_ROOT_PATH_ASUSTOR)
-	@cp asustor_main.c asustor_gpl2.c $(DKMS_ROOT_PATH_ASUSTOR)
-	@sed -i -e '/^PACKAGE_VERSION=/ s/=.*/=\"$(DRIVER_VERSION)\"/' $(DKMS_ROOT_PATH_ASUSTOR)/dkms.conf
+# Unloads modules from an earlier install first, so the new version is the
+# one that runs.
+dkms: dkms_install
+	@$(MAKE) --no-print-directory dkms_unload
+	modprobe asustor_gpio_it87
+	modprobe asustor_it87
+	modprobe asustor
 
-	@mkdir -p $(DKMS_ROOT_PATH_ASUSTOR_IT87)
-	@echo "obj-m := asustor_it87.o" >>$(DKMS_ROOT_PATH_ASUSTOR_IT87)/Makefile
-	@echo "obj-ko := asustor_it87.ko" >>$(DKMS_ROOT_PATH_ASUSTOR_IT87)/Makefile
-	@cp dkms_it87.conf $(DKMS_ROOT_PATH_ASUSTOR_IT87)/dkms.conf
-	@cp asustor_it87.c $(DKMS_ROOT_PATH_ASUSTOR_IT87)
-	@sed -i -e '/^PACKAGE_VERSION=/ s/=.*/=\"$(DRIVER_VERSION)\"/' $(DKMS_ROOT_PATH_ASUSTOR_IT87)/dkms.conf
+# Removes every installed version of the DKMS package, including the
+# per-module packages from before 0.3.0, and their sources in /usr/src.
+dkms_remove:
+	@for pkg in $(DKMS_PACKAGES); do \
+		for src in /var/lib/dkms/$$pkg/*/source; do \
+			[ -e "$$src" ] || [ -L "$$src" ] || continue; \
+			ver=$$(basename "$$(dirname "$$src")"); \
+			echo "Removing DKMS package $$pkg/$$ver"; \
+			dkms remove -m "$$pkg" -v "$$ver" --all || { \
+				echo "dkms could not remove $$pkg/$$ver; fix the error above" \
+					"(dkms needs /usr/src/$$pkg-$$ver), then run make again." >&2; \
+				exit 1; \
+			}; \
+			rm -rf "/usr/src/$$pkg-$$ver"; \
+		done; \
+	done
 
-	@mkdir -p $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)
-	@echo "obj-m := asustor_gpio_it87.o" >>$(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/Makefile
-	@echo "obj-ko := asustor_gpio_it87.ko" >>$(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/Makefile
-	@cp dkms_gpio_it87.conf $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/dkms.conf
-	@cp asustor_gpio_it87.c $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)
-	@sed -i -e '/^PACKAGE_VERSION=/ s/=.*/=\"$(DRIVER_VERSION)\"/' $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/dkms.conf
-
-	@dkms add -m asustor -v $(DRIVER_VERSION)
-	@dkms add -m asustor-it87 -v $(DRIVER_VERSION)
-	@dkms add -m asustor-gpio-it87 -v $(DRIVER_VERSION)
-	@dkms build -m asustor -v $(DRIVER_VERSION)
-	@dkms build -m asustor-it87 -v $(DRIVER_VERSION)
-	@dkms build -m asustor-gpio-it87 -v $(DRIVER_VERSION)
-	@dkms install --force -m asustor -v $(DRIVER_VERSION)
-	@dkms install --force -m asustor-it87 -v $(DRIVER_VERSION)
-	@dkms install --force -m asustor-gpio-it87 -v $(DRIVER_VERSION)
-	@modprobe asustor_gpio_it87
-	@modprobe asustor_it87
-	@modprobe asustor
+# asustor uses the GPIO chip of asustor_gpio_it87, so it is unloaded first.
+dkms_unload:
+	@for mod in asustor asustor_it87 asustor_gpio_it87; do \
+		[ -d "/sys/module/$$mod" ] || continue; \
+		rmmod "$$mod" || { \
+			echo "Cannot unload $$mod; stop what uses it, or reboot to load the new version." >&2; \
+			exit 1; \
+		}; \
+	done
 
 dkms_clean:
-	@rmmod asustor 2> /dev/null || true
-	@rmmod asustor_it87 2> /dev/null || true
-	@rmmod asustor_gpio_it87 2> /dev/null || true
-	@dkms remove -m asustor -v $(DRIVER_VERSION) --all
-	@dkms remove -m asustor-it87 -v $(DRIVER_VERSION) --all
-	@dkms remove -m asustor-gpio-it87 -v $(DRIVER_VERSION) --all
-	@rm -rf $(DKMS_ROOT_PATH_ASUSTOR)
-	@rm -rf $(DKMS_ROOT_PATH_ASUSTOR_IT87)
-	@rm -rf $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)
+	@$(MAKE) --no-print-directory dkms_unload || true
+	@$(MAKE) --no-print-directory dkms_remove
 
+.PHONY: all modules install uninstall clean dkms dkms_install dkms_remove dkms_unload dkms_clean
