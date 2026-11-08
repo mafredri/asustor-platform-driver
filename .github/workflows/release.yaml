@@ -35,7 +35,7 @@ jobs:
   build:
     name: Build
     needs: check
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/build.yaml
 
   release:
     name: Publish release
