@@ -1,0 +1,185 @@
+# Builds the modules against distribution kernel headers and kernel.org
+# source trees, and runs checkpatch on pull request commits.
+name: Build
+
+# Pull requests run through pull_request only; push covers merges to main.
+# The weekly run catches breakage from new mainline release candidates.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  distro:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Debian 12, image: "debian:bookworm" }
+          - { name: Debian 13, image: "debian:trixie" }
+          - { name: Ubuntu 24.04, image: "ubuntu:24.04" }
+          - { name: Ubuntu 26.04, image: "ubuntu:26.04" }
+          - { name: Arch Linux, image: "archlinux:latest" }
+    steps:
+      # Installed before checkout so that actions/checkout clones with git
+      # and the clean-tree check below has a repository to inspect.
+      - name: Install compiler, git and kernel headers
+        run: |
+          case "${{ matrix.image }}" in
+          debian:*)
+            apt-get update
+            apt-get install -y --no-install-recommends build-essential ca-certificates git kmod linux-headers-amd64
+            ;;
+          ubuntu:24.04)
+            # The HWE headers add the newer kernel series 24.04 users get by default on new installs.
+            apt-get update
+            apt-get install -y --no-install-recommends build-essential ca-certificates git kmod linux-headers-generic linux-headers-generic-hwe-24.04
+            ;;
+          ubuntu:*)
+            apt-get update
+            apt-get install -y --no-install-recommends build-essential ca-certificates git kmod linux-headers-generic
+            ;;
+          archlinux:*)
+            # linux-lts-headers adds the current LTS series next to the latest stable.
+            pacman -Syu --noconfirm --needed base-devel git linux-headers linux-lts-headers
+            ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The container runs the runner's kernel, so build against every
+      # installed headers tree instead of the running one.
+      - name: Build
+        run: |
+          set -e
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          found=0
+          for kdir in /lib/modules/*/build; do
+            [ -d "$kdir" ] || continue
+            found=1
+            echo "::group::$(basename "$(dirname "$kdir")")"
+            make KERNEL_BUILD="$kdir" KCFLAGS=-Werror
+            for ko in *.ko; do
+              modinfo -F vermagic "$ko"
+            done
+            if [ -n "$(git status --porcelain)" ]; then
+              git status --porcelain
+              echo "::error::The build left untracked or modified files; add the build outputs to .gitignore."
+              exit 1
+            fi
+            make KERNEL_BUILD="$kdir" clean
+            echo "::endgroup::"
+          done
+          [ "$found" = 1 ] || { echo "::error::No kernel headers found under /lib/modules; check the install step for ${{ matrix.image }}."; exit 1; }
+
+  kernel-org-matrix:
+    name: List kernel.org releases
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.list.outputs.include }}
+    steps:
+      # Mainline, stable and every longterm series from the supported floor
+      # (6.1) up, as listed on kernel.org today.
+      - id: list
+        shell: python
+        run: |
+          import json, os, urllib.request
+
+          with urllib.request.urlopen("https://www.kernel.org/releases.json") as r:
+              releases = json.load(r)["releases"]
+
+          def key(version):
+              return tuple(int(p) for p in version.split("-")[0].split("."))
+
+          include, seen = [], set()
+          for rel in releases:
+              if rel["moniker"] not in ("mainline", "stable", "longterm"):
+                  continue
+              if not rel["source"] or rel["version"] in seen or key(rel["version"])[:2] < (6, 1):
+                  continue
+              seen.add(rel["version"])
+              include.append({"name": f'{rel["moniker"]} {rel["version"]}', "url": rel["source"]})
+
+          if not include:
+              raise SystemExit("No kernel.org releases matched; check the filter against https://www.kernel.org/releases.json")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"include={json.dumps(include)}\n")
+
+  kernel-org:
+    name: kernel.org ${{ matrix.name }}
+    needs: kernel-org-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.kernel-org-matrix.outputs.include) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install kernel build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex libelf-dev libssl-dev
+
+      - name: Download and prepare kernel source
+        env:
+          URL: ${{ matrix.url }}
+        run: |
+          # Saved to a file because tar only detects the compression
+          # (.tar.gz for mainline, .tar.xz for stable) on a seekable input.
+          curl -fsSL -o "$RUNNER_TEMP/linux.tar" "$URL"
+          mkdir "$RUNNER_TEMP/linux"
+          tar -xf "$RUNNER_TEMP/linux.tar" -C "$RUNNER_TEMP/linux" --strip-components=1
+          .github/scripts/prepare-kernel.sh "$RUNNER_TEMP/linux"
+
+      # Without vmlinux there is no Module.symvers, so modpost only warns
+      # about unresolved symbols: these jobs check that the modules compile.
+      # Symbol resolution is checked only by the distro jobs, for their kernels.
+      - name: Build
+        run: |
+          make KERNEL_BUILD="$RUNNER_TEMP/linux" KBUILD_MODPOST_WARN=1 KCFLAGS=-Werror
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            echo "::error::The build left untracked or modified files; add the build outputs to .gitignore."
+            exit 1
+          fi
+
+  checkpatch:
+    name: checkpatch
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      # checkpatch.pl and the data files it reads, from this kernel release.
+      LINUX_REF: v7.3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Fetch checkpatch
+        run: |
+          mkdir "$RUNNER_TEMP/checkpatch"
+          for f in checkpatch.pl spelling.txt const_structs.checkpatch; do
+            curl -fsSL -o "$RUNNER_TEMP/checkpatch/$f" "https://raw.githubusercontent.com/torvalds/linux/$LINUX_REF/scripts/$f"
+          done
+          chmod +x "$RUNNER_TEMP/checkpatch/checkpatch.pl"
+
+      - name: Run checkpatch on each commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/checkpatch-range.sh "$RUNNER_TEMP/checkpatch/checkpatch.pl" "$BASE" "$HEAD"
