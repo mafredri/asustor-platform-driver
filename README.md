@@ -88,6 +88,8 @@ make
 sudo make install
 ```
 
+`sudo make uninstall` removes the modules again.
+
 ### NixOS
 Include the platform drivers in your `flake.nix` as follows:
 ```
@@ -255,8 +257,23 @@ NOTE: If `gpioinfo` does not return anything, you may need to figure out which (
 
 ## DKMS
 
-DKMS installation to enable module auto-build with kernel upgrades. 
+DKMS rebuilds the modules automatically when a new kernel is installed.
 
 ```
 sudo make dkms
+```
+
+This installs the `asustor-platform-driver` DKMS package for the running kernel and loads the modules.
+It first removes any version installed before, including the separate `asustor`, `asustor-it87` and
+`asustor-gpio-it87` packages that versions before 0.3.0 installed, and unloads modules that are already
+loaded so the new version runs.
+
+With Secure Boot enabled, the kernel only loads the modules after the key DKMS signs them with is
+enrolled; until then `modprobe` fails with "Key was rejected by service". See
+[DKMS module signing](https://github.com/dkms-project/dkms#module-signing) for how to enroll it with `mokutil`.
+
+To remove the package:
+
+```
+sudo make dkms_clean
 ```
