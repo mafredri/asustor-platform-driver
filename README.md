@@ -225,7 +225,7 @@ so the detection logic in the `asustor` kernel module can be fixed to properly s
 ## Support
 
 If you would like additional hardware to be supported, pull requests are more than welcome. Otherwise, open a
-[hardware support issue](https://github.com/mafredri/asustor-platform-driver/issues/new?template=hardware-support.yml)
+[hardware support issue](https://github.com/mafredri/asustor-platform-driver/issues/new?template=hardware-support.yaml)
 and attach the output of:
 
 ```

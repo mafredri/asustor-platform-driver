@@ -24,7 +24,7 @@ Out-of-tree Linux kernel modules for ASUSTOR NAS hardware. Write code and commit
 
 ## checkpatch
 
-CI runs `.github/scripts/checkpatch-range.sh` on every commit in a pull request, with `checkpatch.pl` from the kernel release pinned in `.github/workflows/build.yml`. It fails on errors and warnings. To run it locally, pass the PR's base branch (not always `origin/main` for stacked PRs):
+CI runs `.github/scripts/checkpatch-range.sh` on every commit in a pull request, with `checkpatch.pl` from the kernel release pinned in `.github/workflows/build.yaml`. It fails on errors and warnings. To run it locally, pass the PR's base branch (not always `origin/main` for stacked PRs):
 
 ```sh
 .github/scripts/checkpatch-range.sh <linux>/scripts/checkpatch.pl <base> HEAD
@@ -54,7 +54,7 @@ make KERNEL_BUILD=/path/to/kernel/build   # against another headers tree
 make clean                                # pass the same KERNEL_BUILD= as the build
 ```
 
-Without the hardware, verification means building. CI (`.github/workflows/build.yml`) builds every pull request with `-Werror` against distribution kernel headers and against kernel.org trees (mainline, stable, and longterm releases from 6.1). To reproduce a kernel.org build locally:
+Without the hardware, verification means building. CI (`.github/workflows/build.yaml`) builds every pull request with `-Werror` against distribution kernel headers and against kernel.org trees (mainline, stable, and longterm releases from 6.1). To reproduce a kernel.org build locally:
 
 ```sh
 .github/scripts/prepare-kernel.sh /path/to/linux-x.y
@@ -73,7 +73,7 @@ In the PR, say which parts you wrote, what you built, and whether any of it ran 
 
 ## Releases
 
-Versions follow [semver](https://semver.org/), and the release tag `vX.Y.Z` is the only place the version is set. `scripts/version.sh` derives the version from it for `make dkms`, in a git clone and in source archives. To release, push the tag on a commit on `main`. Only tags of exactly the form `vX.Y.Z` count, one per commit. `.github/workflows/release.yml` checks that the commit is on `main`, builds it, then publishes a GitHub release with a source tarball and notes listing the merged pull requests. Push tags only when asked to.
+Versions follow [semver](https://semver.org/), and the release tag `vX.Y.Z` is the only place the version is set. `scripts/version.sh` derives the version from it for `make dkms`, in a git clone and in source archives. To release, push the tag on a commit on `main`. Only tags of exactly the form `vX.Y.Z` count, one per commit. `.github/workflows/release.yaml` checks that the commit is on `main`, builds it, then publishes a GitHub release with a source tarball and notes listing the merged pull requests. Push tags only when asked to.
 
 ## Commits
 
