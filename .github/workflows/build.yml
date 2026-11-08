@@ -1,6 +1,6 @@
 # Builds the modules against distribution kernel headers and kernel.org
-# source trees, tests DKMS install and removal, and runs checkpatch on pull
-# request commits.
+# source trees and the Nix flake, tests DKMS install and removal, and runs
+# checkpatch on pull request commits.
 name: Build
 
 # Pull requests run through pull_request only; push covers merges to main.
@@ -167,6 +167,22 @@ jobs:
             echo "::error::The build left untracked or modified files; add the build outputs to .gitignore."
             exit 1
           fi
+
+  # flake.nix has no lock file, so this builds against the current
+  # nixos-unstable default and latest kernels.
+  nix:
+    name: Nix flake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+
+      - name: Check and build the flake
+        run: |
+          nix flake check --no-write-lock-file --print-build-logs
+          nix build --no-write-lock-file --print-build-logs .#default .#latest
+          find -L result* -name '*.ko*' | sort
 
   checkpatch:
     name: checkpatch

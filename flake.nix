@@ -14,7 +14,10 @@
 
           stdenv.mkDerivation rec {
             name = "asustor-platform-driver-${version}-${kernel.version}";
-            version = "0.1";
+            # Releases are git tags, which flakes cannot see; use the
+            # commit, like scripts/version.sh does without a tag. Builds
+            # without a lock file, as in CI, have no revision: "0-gdirty".
+            version = "0-g${self.shortRev or self.dirtyShortRev or "dirty"}";
 
             src = ./.;
 
@@ -54,6 +57,12 @@
             boot.extraModulePackages = [ asustor-platform-driver ];
           };
         });
+      # Builds against the default and the latest kernel in nixpkgs; CI
+      # builds both.
+      packages.${system} = {
+        default = pkgs.linuxPackages.callPackage module { };
+        latest = pkgs.linuxPackages_latest.callPackage module { };
+      };
       formatter.${system} = pkgs.nixpkgs-fmt;
     };
 }
