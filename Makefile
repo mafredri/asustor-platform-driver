@@ -8,7 +8,7 @@ DRIVER         := asustor asustor_it87 asustor_gpio_it87
 PACKAGE_NAME    := asustor-platform-driver
 PACKAGE_VERSION := $(shell sed -n 's/^PACKAGE_VERSION="\(.*\)"$$/\1/p' dkms.conf)
 DKMS_SOURCE     := /usr/src/$(PACKAGE_NAME)-$(PACKAGE_VERSION)
-DKMS_FILES      := Kbuild dkms.conf $(wildcard *.c)
+DKMS_FILES      := Kbuild dkms.conf $(filter-out %.mod.c,$(wildcard *.c))
 # Before 0.3.0, `make dkms` installed one DKMS package per module.
 DKMS_PACKAGES   := $(PACKAGE_NAME) asustor asustor-it87 asustor-gpio-it87
 
