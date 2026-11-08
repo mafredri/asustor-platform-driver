@@ -684,6 +684,11 @@ static int __init asustor_init(void)
 		        system->matches[0].substr, system->matches[1].substr);
 	}
 
+	// leds-gpio requests the legacy GPIO number of LEDs that the model's
+	// lookup table does not map; make it invalid instead of GPIO 0.
+	for (i = 0; i < ARRAY_SIZE(asustor_leds); i++)
+		asustor_leds[i].gpio = -1;
+
 	gpiod_add_lookup_table(driver_data->leds);
 	gpiod_add_lookup_table(driver_data->keys);
 
