@@ -564,19 +564,13 @@ static int get_gpio_base_for_chipname(const char *name)
 // How many PCI(e) devices with given vendor/device IDs exist in this system?
 static int count_pci_device_instances(unsigned int vendor, unsigned int device)
 {
+	struct pci_dev *pd = NULL;
 	int ret = 0;
-	struct pci_dev *pd, *last_pd = NULL;
 
-	while ((pd = pci_get_device(vendor, device, last_pd)) != NULL) {
-		if (last_pd) {
-			pci_dev_put(last_pd);
-		}
-		last_pd = pd;
-		++ret;
-	}
-	if (last_pd) {
-		pci_dev_put(last_pd);
-	}
+	// pci_get_device() puts the reference to pd and returns the next match
+	// with a new reference, so the loop holds none when it ends.
+	while ((pd = pci_get_device(vendor, device, pd)))
+		ret++;
 	return ret;
 }
 
