@@ -8,7 +8,7 @@ Module.symvers
 modules.order
 
 # nix build
-/result
+/result*
 
 # checkpatch.pl --strict caches CamelCase identifiers in the working directory
 .checkpatch-camelcase.*
