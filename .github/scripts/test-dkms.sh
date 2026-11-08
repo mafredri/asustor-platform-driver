@@ -8,7 +8,7 @@
 set -eu
 
 pkg=asustor-platform-driver
-ver=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)
+ver=$(scripts/version.sh)
 
 fail() {
 	echo "test-dkms.sh: $*" >&2
@@ -72,6 +72,8 @@ for run in 1 2; do
 	if ls "/usr/src/$pkg-$ver"/*.mod.c >/dev/null 2>&1; then
 		fail "run $run: dkms_install copied generated .mod.c files."
 	fi
+	grep -qx "PACKAGE_VERSION=\"$ver\"" "/usr/src/$pkg-$ver/dkms.conf" ||
+		fail "run $run: the installed dkms.conf does not say version $ver."
 	for old in asustor asustor-it87 asustor-gpio-it87; do
 		registered "$old" && fail "run $run: $old is still registered."
 		[ ! -e "/usr/src/$old-v0.2" ] || fail "run $run: /usr/src/$old-v0.2 is left."

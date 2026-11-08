@@ -4,11 +4,12 @@ KERNEL_BUILD   := $(KERNEL_MODULES)/build
 SYSTEM_MAP     := /boot/System.map-$(TARGET)
 DRIVER         := asustor asustor_it87 asustor_gpio_it87
 
-# DKMS package; dkms.conf holds the version.
+# DKMS package. The version comes from the release tags (scripts/version.sh),
+# and make dkms writes it into the dkms.conf it installs.
 PACKAGE_NAME    := asustor-platform-driver
-PACKAGE_VERSION := $(shell sed -n 's/^PACKAGE_VERSION="\(.*\)"$$/\1/p' dkms.conf)
+PACKAGE_VERSION := $(shell scripts/version.sh 2>/dev/null)
 DKMS_SOURCE     := /usr/src/$(PACKAGE_NAME)-$(PACKAGE_VERSION)
-DKMS_FILES      := Kbuild dkms.conf $(filter-out %.mod.c,$(wildcard *.c))
+DKMS_FILES      := Kbuild $(filter-out %.mod.c,$(wildcard *.c))
 # Before 0.3.0, `make dkms` installed one DKMS package per module.
 DKMS_PACKAGES   := $(PACKAGE_NAME) asustor asustor-it87 asustor-gpio-it87
 
@@ -34,15 +35,16 @@ clean:
 
 # Installs the modules through DKMS for $(TARGET); AUTOINSTALL rebuilds them
 # for kernels installed later. Replaces any version installed before, after
-# checking the version so a bad dkms.conf cannot remove a working install.
+# checking the version so a failed lookup cannot remove a working install.
 dkms_install:
 	@[ -n "$(PACKAGE_VERSION)" ] || { \
-		echo "No PACKAGE_VERSION=\"x.y.z\" line in dkms.conf; run make in the repository root." >&2; \
+		echo "Cannot determine the version; run scripts/version.sh to see why." >&2; \
 		exit 1; \
 	}
 	@$(MAKE) --no-print-directory dkms_remove
 	mkdir -p $(DKMS_SOURCE)
 	cp $(DKMS_FILES) $(DKMS_SOURCE)
+	sed 's/^PACKAGE_VERSION=.*/PACKAGE_VERSION="$(PACKAGE_VERSION)"/' dkms.conf >$(DKMS_SOURCE)/dkms.conf
 	dkms add -m $(PACKAGE_NAME) -v $(PACKAGE_VERSION)
 	dkms build -m $(PACKAGE_NAME) -v $(PACKAGE_VERSION) -k $(TARGET)
 	dkms install -m $(PACKAGE_NAME) -v $(PACKAGE_VERSION) -k $(TARGET)

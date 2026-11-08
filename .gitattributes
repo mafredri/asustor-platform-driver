@@ -1,0 +1,2 @@
+# git archive fills in VERSION; see scripts/version.sh.
+VERSION export-subst

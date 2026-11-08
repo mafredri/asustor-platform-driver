@@ -1,0 +1,78 @@
+# Publishes a GitHub release with a source tarball when a vX.Y.Z tag is
+# pushed on main. The tag is the version; see "Releases" in AGENTS.md.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # scripts/version.sh picks one release tag per commit, so a second one
+      # would give the tarball another version.
+      - name: Check the tag is on main and the commit's only release tag
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points to a commit that is not on main. Delete the tag and tag a commit on main."
+            exit 1
+          fi
+          tags=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [ "$tags" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::The tagged commit has several release tags ($(echo "$tags" | tr '\n' ' ')). Delete all but one."
+            exit 1
+          fi
+
+  build:
+    name: Build
+    needs: check
+    uses: ./.github/workflows/build.yml
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Full history with tags, so git archive can fill in VERSION.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Create source tarball
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          echo "VERSION=$version" >>"$GITHUB_ENV"
+          git archive --format=tar.gz --prefix="asustor-platform-driver-$version/" \
+            -o "asustor-platform-driver-$version.tar.gz" "$GITHUB_SHA"
+          tar -xzf "asustor-platform-driver-$version.tar.gz" -C "$RUNNER_TEMP"
+          got=$("$RUNNER_TEMP/asustor-platform-driver-$version/scripts/version.sh")
+          if [ "$got" != "$version" ]; then
+            echo "::error::The tarball reports version $got instead of $version; check VERSION and .gitattributes."
+            exit 1
+          fi
+
+      # Release notes list the pull requests merged since the previous tag. A
+      # re-run finishes a release that an earlier run left unfinished.
+      - name: Create release
+        run: |
+          tarball="asustor-platform-driver-$VERSION.tar.gz"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$tarball" --clobber
+            gh release edit "$GITHUB_REF_NAME" --draft=false
+          else
+            gh release create "$GITHUB_REF_NAME" "$tarball" \
+              --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          fi
