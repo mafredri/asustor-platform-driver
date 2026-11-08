@@ -1,5 +1,6 @@
 # Builds the modules against distribution kernel headers and kernel.org
-# source trees, and runs checkpatch on pull request commits.
+# source trees, tests DKMS install and removal, and runs checkpatch on pull
+# request commits.
 name: Build
 
 # Pull requests run through pull_request only; push covers merges to main.
@@ -84,6 +85,14 @@ jobs:
             echo "::endgroup::"
           done
           [ "$found" = 1 ] || { echo "::error::No kernel headers found under /lib/modules; check the install step for ${{ matrix.image }}."; exit 1; }
+
+      - name: DKMS install and removal
+        run: |
+          case "${{ matrix.image }}" in
+          debian:* | ubuntu:*) apt-get install -y --no-install-recommends dkms ;;
+          archlinux:*) pacman -S --noconfirm --needed dkms ;;
+          esac
+          .github/scripts/test-dkms.sh
 
   kernel-org-matrix:
     name: List kernel.org releases
