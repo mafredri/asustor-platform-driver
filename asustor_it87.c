@@ -2696,7 +2696,7 @@ static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
  * can be controlled by the user.
  * For each GPIO pin there's a bit in a register for this - that bit being 0 means "alternate mode",
  * 1 means "Simple I/O function" mode.
- * See GPLED_TO_ALT_FN_SEL_REG() and GPLED_TO_ALT_FN_SEL_BIT() for how to select the register/bit for a GPIO.
+ * See gpled_set_simple_io() for how to select the register/bit for a GPIO.
  */
 
 #define GPLED_TO_LOCATION(GP_LED) \
@@ -2704,22 +2704,38 @@ static SENSOR_DEVICE_ATTR(in9_label, S_IRUGO, show_label, NULL, 3);
 #define LOCATION_TO_GPLED(LOCATION) \
 	({ (((LOCATION) >> 3) * 10) + ((LOCATION) & 0x07); })
 
-/* Get the "Simple I/O Set Enable Register" and the bit within it that switch
- * a GPIO between "Simple I/O function" mode and "Alternate function" mode
- * (the "Alternate function mode" allows blinking control).
- * Examples:
- *  GP14 => reg 0xC0, bit BIT(4)
- *  GP30 => reg 0xC2, bit BIT(0)
- *  GP47 => reg 0xC3, bit BIT(7)
- * Note that the bit in the register being set to 1 means "Simple I/O function",
- * and it being set to 0 means "Alternate function", which allows configuring blinking for that GPIO
- */
-#define GPLED_TO_ALT_FN_SEL_REG(GP_LED) \
-	(0xC0 + ((GP_LED) / 10) - 1)
-#define GPLED_TO_ALT_FN_SEL_BIT(GP_LED) \
-	(BIT((GP_LED) % 10))
-
 static const u8 IT87_REG_GP_LED_CTRL_PIN_MAPPING[] = {0xf8, 0xfa};
+
+/*
+ * Blink locations exist only for GPIO sets 1 to 5, GP10 to GP57 (IT8728F
+ * datasheet, Table 8-14 "Location Mapping Table"; the IT8720F table has the
+ * same range). The tables also reserve single pins, which differ between
+ * chips and are not rejected here.
+ */
+static bool gpled_location_valid(unsigned int loc)
+{
+	unsigned int set = loc >> 3;
+
+	return set >= 1 && set <= 5;
+}
+
+/*
+ * Bit (loc & 7) of Simple I/O enable register 0xc0 + set - 1 selects the
+ * pin's Simple I/O function (1) or its alternate function (0), which is the
+ * one that blinks. For example, GP47 is bit 7 of 0xc3. Call with the GPIO
+ * logical device selected.
+ */
+static void gpled_set_simple_io(int sioaddr, unsigned int loc, bool simple)
+{
+	int reg = 0xc0 + (loc >> 3) - 1;
+	u8 val = superio_inb(sioaddr, reg);
+
+	if (simple)
+		val |= BIT(loc & 7);
+	else
+		val &= ~BIT(loc & 7);
+	superio_outb(sioaddr, reg, val);
+}
 
 /* read a byte from given GPIO register, returns negative value (-EASDF) on error */
 static int read_gpio_reg(struct it87_data *data, int reg)
@@ -2793,41 +2809,42 @@ static ssize_t set_gpled_blink(struct device *dev, struct device_attribute *attr
 {
 	struct sensor_device_attribute_2 *sattr = to_sensor_dev_attr_2(attr);
 	struct it87_data *data = dev_get_drvdata(dev);
-	int led_map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
-	int err, loc, oldloc, ledfnbit;
-	long val;
+	int map_reg = IT87_REG_GP_LED_CTRL_PIN_MAPPING[sattr->index];
+	int sioaddr = data->sioaddr;
+	unsigned int val, loc = 0, oldloc;
+	int map, err;
 
-	/* the input value is like in it87_gpXY, where Y is 0..7 as it's a bit index apparently?
-	   and, as far as I can tell, X <= 8 */
-	if (0 > kstrtol(buf, 10, &val) || (val % 10) >= 8 || (val / 10) > 8) {
-		pr_info("set_gpled_blink(): invalid value %s\n", buf);
-		return -EINVAL;
-	}
-
-	/* switch the old/current blinking LED pin back to the "Simple I/O function"
-	 * (instead of "alternate function") so it can be controlled normally again
-	 * Note: Bit being 0 means alternate function, 1 means Simple I/O */
-	oldloc = read_gpio_reg(data, led_map_reg) & ~(BIT(6) | BIT(7));
-	if(oldloc != 0) {
-		int oldgpled = LOCATION_TO_GPLED(oldloc);
-		int oldgpledbit = GPLED_TO_ALT_FN_SEL_BIT(oldgpled);
-		update_gpio_reg(data, GPLED_TO_ALT_FN_SEL_REG(oldgpled), oldgpledbit, ~oldgpledbit);
-	}
-
-	/* switch new blinking LED pin to "alternate function" mode so it can blink */
-	if(val != 0) {
-		ledfnbit = GPLED_TO_ALT_FN_SEL_BIT(val);
-		err = update_gpio_reg(data, GPLED_TO_ALT_FN_SEL_REG(val), 0, ~ledfnbit);
-		if(err)
-			return err;
-	}
-
-	loc = GPLED_TO_LOCATION(val);
-	/* preserve bits 6 and 7 of the register, replace the rest with loc */
-	err = update_gpio_reg(data, led_map_reg, loc, BIT(6) | BIT(7));
-	if(err)
+	/* XY as in it87_gpXY: GPIO set X, bit Y; 0 stops blinking */
+	err = kstrtouint(buf, 10, &val);
+	if (err)
 		return err;
+	if (val) {
+		if (val % 10 > 7)
+			return -EINVAL;
+		loc = GPLED_TO_LOCATION(val);
+		if (!gpled_location_valid(loc))
+			return -EINVAL;
+	}
 
+	err = superio_enter(sioaddr);
+	if (err)
+		return err;
+	superio_select(sioaddr, GPIO);
+
+	/*
+	 * Give the old pin back to Simple I/O so it can be set again. Firmware
+	 * may have left a location that is not a blink pin; leave that alone.
+	 */
+	map = superio_inb(sioaddr, map_reg);
+	oldloc = map & 0x3f;
+	if (gpled_location_valid(oldloc))
+		gpled_set_simple_io(sioaddr, oldloc, true);
+	if (loc)
+		gpled_set_simple_io(sioaddr, loc, false);
+	/* bits 7:6 are not part of the location */
+	superio_outb(sioaddr, map_reg, (map & 0xc0) | loc);
+
+	superio_exit(sioaddr, data->doexit);
 	return count;
 }
 
