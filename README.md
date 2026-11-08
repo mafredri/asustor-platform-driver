@@ -224,27 +224,20 @@ so the detection logic in the `asustor` kernel module can be fixed to properly s
 
 ## Support
 
-If you would like additional hardware to be supported, pull requests are more than welcome. Alternatively, you can install these prerequisites:
+If you would like additional hardware to be supported, pull requests are more than welcome. Otherwise, open a
+[hardware support issue](https://github.com/mafredri/asustor-platform-driver/issues/new?template=hardware-support.yml)
+and attach the output of:
 
 ```
-sudo apt-get install -y gpiod
+sudo scripts/collect-info.sh >asustor-info.md
 ```
 
-And then open an issue and attach outputs from the following commands:
-
-```
-sudo dmesg
-sudo dmidecode -s system-manufacturer
-sudo dmidecode -s system-product-name
-sudo dmidecode -s bios-vendor
-sudo dmidecode -s bios-version
-sudo dmidecode -s bios-release-date
-sudo dmidecode -s bios-revision
-sudo gpioinfo
-sudo lspci -nn -PP
-```
-
-NOTE: If `gpioinfo` does not return anything, you may need to figure out which (if any) gpio drivers to load. Also keep in mind that your distribution may not ship with all `gpio-` drivers, so you may need to compile them yourself.
+Build and load the modules first if they load on your device (see [Installation](#installation)), so the output
+shows what they detect. If you can, also run it once before loading them, which shows how the firmware set up the
+pins. The script only reads: it lists the DMI strings, CPU, PCI devices, GPIO lines and pin configuration, disks,
+sensors, LEDs and the related kernel log. It leaves out serial numbers, UUIDs, MAC addresses and the kernel command
+line, but look through the file before attaching it. Installing `pciutils`, `gpiod` and `lm-sensors` (Debian and
+Ubuntu package names) makes the output more complete.
 
 ## TODO
 
