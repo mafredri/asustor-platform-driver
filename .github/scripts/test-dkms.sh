@@ -64,8 +64,14 @@ registered() {
 	ls "/var/lib/dkms/$1"/*/source >/dev/null 2>&1
 }
 
+# Leave build output in the tree, as `make` before `make dkms` would.
+make KERNEL_BUILD="/lib/modules/$first/build"
+
 for run in 1 2; do
 	make dkms_install TARGET="$first"
+	if ls "/usr/src/$pkg-$ver"/*.mod.c >/dev/null 2>&1; then
+		fail "run $run: dkms_install copied generated .mod.c files."
+	fi
 	for old in asustor asustor-it87 asustor-gpio-it87; do
 		registered "$old" && fail "run $run: $old is still registered."
 		[ ! -e "/usr/src/$old-v0.2" ] || fail "run $run: /usr/src/$old-v0.2 is left."
@@ -85,6 +91,7 @@ done
 dkms status
 
 make dkms_clean
+make KERNEL_BUILD="/lib/modules/$first/build" clean
 [ ! -e "/usr/src/$pkg-$ver" ] || fail "dkms_clean left /usr/src/$pkg-$ver."
 if registered "$pkg"; then
 	fail "dkms_clean left $pkg registered."
