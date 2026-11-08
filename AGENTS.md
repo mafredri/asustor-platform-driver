@@ -77,7 +77,7 @@ Versions follow [semver](https://semver.org/), and the release tag `vX.Y.Z` is t
 
 ## Commits
 
-- Subject: `<prefix>: <imperative summary>`, at most 75 characters. Prefixes: `asustor`, `asustor-it87`, `asustor-gpio-it87`, `build` (Makefile, Kbuild), `clang-format`, `dkms`, `ci`, `docs`, `nix`.
+- Subject: `<prefix>: <imperative summary>`, at most 75 characters. Prefixes: `asustor`, `asustor-it87`, `asustor-gpio-it87`, `build` (Makefile, Kbuild), `clang-format`, `dkms`, `scripts`, `ci`, `docs`, `nix`.
 - Body: what was wrong or missing and why this change fixes it, wrapped at 75 columns. Keep trailers such as `Fixes:` and `Link:` on one line.
 - One logical change per commit. Squash fixups before review.
 - Do not add `Signed-off-by:`. Only a human can certify the [Developer's Certificate of Origin](https://docs.kernel.org/process/submitting-patches.html#sign-your-work-the-developer-s-certificate-of-origin).
