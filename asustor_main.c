@@ -750,6 +750,6 @@ MODULE_AUTHOR("Mathias Fredriksson <mafredri@gmail.com>");
 MODULE_DESCRIPTION("Platform driver for ASUSTOR NAS hardware");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:asustor");
-MODULE_SOFTDEP("pre: asustor-it87 asustor-gpio-it87 gpio-ich"
+MODULE_SOFTDEP("pre: asustor-it87 asustor-gpio-it87 gpio-ich pinctrl-cherryview"
                " platform:leds-gpio"
                " platform:gpio-keys-polled");
