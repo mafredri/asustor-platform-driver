@@ -1,0 +1,14 @@
+# Kbuild output from building in the source directory (M=$(CURDIR))
+*.o
+*.ko
+*.mod
+*.mod.c
+.*.cmd
+Module.symvers
+modules.order
+
+# nix build
+/result
+
+# checkpatch.pl --strict caches CamelCase identifiers in the working directory
+.checkpatch-camelcase.*
