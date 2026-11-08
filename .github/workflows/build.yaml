@@ -1,6 +1,7 @@
 # Builds the modules against distribution kernel headers and kernel.org
 # source trees and the Nix flake, tests DKMS install and removal, and runs
-# checkpatch on pull request commits.
+# checkpatch on pull request commits. Pull requests that change only
+# documentation skip the builds.
 name: Build
 
 # Pull requests run through pull_request only; push covers merges to main.
@@ -23,8 +24,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides whether the build jobs run: always, except on pull requests whose
+  # every changed file matches the documentation patterns below.
+  changes:
+    name: Detect build changes
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.diff.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          build=true
+          if [ "$EVENT" = pull_request ]; then
+            files=$(git diff --name-only "$BASE...$HEAD")
+            printf '%s\n' "$files"
+            # Files no build, package or test reads.
+            docs='\.md$|^research/|^example/|^\.github/ISSUE_TEMPLATE/|^LICENSE$'
+            printf '%s\n' "$files" | grep -v -E "$docs" | grep -q . || build=false
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
   distro:
     name: ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     container: ${{ matrix.image }}
     strategy:
@@ -98,6 +130,8 @@ jobs:
 
   kernel-org-matrix:
     name: List kernel.org releases
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     outputs:
       include: ${{ steps.list.outputs.include }}
@@ -172,6 +206,8 @@ jobs:
   # nixos-unstable default and latest kernels.
   nix:
     name: Nix flake
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -210,3 +246,24 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: .github/scripts/checkpatch-range.sh "$RUNNER_TEMP/checkpatch/checkpatch.pl" "$BASE" "$HEAD"
+
+  # The check the main ruleset requires. Matrix job names change with
+  # distribution and kernel.org releases, so they cannot be required one by
+  # one. Skipped jobs pass; !cancelled() keeps a run superseded by a newer
+  # push from reporting a failure.
+  result:
+    name: CI result
+    needs: [changes, distro, kernel-org-matrix, kernel-org, nix, checkpatch]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(printf '%s' "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          if [ -n "$failed" ]; then
+            printf '%s\n' "$failed" | while read -r job; do
+              echo "::error::Job $job; see that job for the cause."
+            done
+            exit 1
+          fi
