@@ -19,8 +19,13 @@
 #include <linux/errno.h>
 #include <linux/ioport.h>
 #include <linux/slab.h>
+#include <linux/mutex.h>
+#include <linux/leds.h>
+#include <linux/gpio/consumer.h>
 #include <linux/gpio/driver.h>
 #include <linux/version.h> // for LINUX_VERSION_CODE and KERNEL_VERSION()
+
+#include "asustor_gpio_it87.h"
 
 /* Chip Id numbers */
 #define NO_DEV_ID	0xffff
@@ -47,6 +52,51 @@
 #define CHIPID		0x20
 #define CHIPREV		0x22
 
+/*
+ * BW: GP LED blink units (LDN 7), see research/LED-Blinking.txt.
+ * Pin mapping register: bits 5:0 GP LED location, bits 7:6 must be preserved
+ * (bit 7 of 0xf8 is "SMBus isolation" on IT8625E).
+ * Control register: bit 0 output low enable, bits 3:1 and 7:6 frequency,
+ * bit 4 pin mapping register clear, bit 5 short low pulse enable.
+ */
+#define IT87_GPIO_BLINK_UNITS		2
+#define IT87_GPIO_BLINK_LOCATION	0x3f
+#define IT87_GPIO_BLINK_CTRL_KEEP	0x30
+
+static const u8 it87_gpio_blink_pin_map_reg[IT87_GPIO_BLINK_UNITS] = { 0xf8, 0xfa };
+static const u8 it87_gpio_blink_ctrl_reg[IT87_GPIO_BLINK_UNITS] = { 0xf9, 0xfb };
+
+/**
+ * struct it87_gpio_blink_mode - hardware blink mode of a GP LED blink unit
+ * @low_ms: time the pin is driven low per period
+ * @high_ms: time the pin is driven high per period
+ * @ctrl: frequency bits for the blink control register
+ */
+struct it87_gpio_blink_mode {
+	u16 low_ms;
+	u16 high_ms;
+	u8 ctrl;
+};
+
+/*
+ * BW: IT8625E blink modes. The frequency bits and times are from the table in
+ * ASUSTOR's GPL kernel source (ADM 4.1.0), which lists "ON" times for LEDs
+ * that light up when the pin is low.
+ */
+static const struct it87_gpio_blink_mode it8625_blink_modes[] = {
+	{  125,  125, 0x00 },
+	{  500,  500, 0x02 },
+	{ 2000, 2000, 0x04 },
+	{  250,  250, 0x06 },
+	{ 3000, 1000, 0x08 },
+	{ 1000, 3000, 0x0a },
+	{ 6000, 2000, 0x0c },
+	{ 2000, 6000, 0x0e },
+	{ 2000,  500, 0x40 },
+	{ 1000, 1000, 0x80 },
+	{ 4000, 4000, 0xc0 },
+};
+
 /**
  * struct it87_gpio - it87-specific GPIO chip
  * @chip: the underlying gpio_chip structure
@@ -59,19 +109,27 @@
  *	required because IT87xx chips might only provide Simple I/O
  *	switches on a subset of lines, whereas the others keep the
  *	same status all time.
+ * @blink_modes: hardware blink modes, NULL if blinking is not supported
+ * @num_blink_modes: number of entries in @blink_modes
  */
 struct it87_gpio {
 	struct gpio_chip chip;
-	spinlock_t lock;
+	struct mutex lock;
 	u16 io_base;
 	u16 io_size;
 	u8 output_base;
 	u8 simple_base;
 	u8 simple_size;
+	const struct it87_gpio_blink_mode *blink_modes;
+	unsigned int num_blink_modes;
 };
 
+/*
+ * BW: a mutex instead of a spinlock, because superio_enter() may sleep in
+ * request_muxed_region() while the it87 hwmon driver holds the region.
+ */
 static struct it87_gpio it87_gpio_chip = {
-	.lock = __SPIN_LOCK_UNLOCKED(it87_gpio_chip.lock),
+	.lock = __MUTEX_INITIALIZER(it87_gpio_chip.lock),
 };
 
 /* Superio chip access functions; copied from wdt_it87 */
@@ -145,6 +203,33 @@ static inline void superio_clear_mask(int mask, int reg)
 		superio_outb(new_val, reg);
 }
 
+/* BW: GP LED location of a line, as used by the blink pin mapping registers */
+static inline u8 it87_gpio_blink_location(unsigned gpio_num)
+{
+	return ((gpio_num / 8 + 1) << 3) | (gpio_num % 8);
+}
+
+/*
+ * BW: stop the blink unit(s) mapped to gpio_num, e.g. by the firmware.
+ * Must be called in a superio_enter() session with the GPIO LDN selected.
+ */
+static void it87_gpio_blink_unmap(struct it87_gpio *it87_gpio,
+				  unsigned gpio_num)
+{
+	u8 loc = it87_gpio_blink_location(gpio_num);
+	int i, val;
+
+	if (!it87_gpio->blink_modes)
+		return;
+
+	for (i = 0; i < IT87_GPIO_BLINK_UNITS; i++) {
+		val = superio_inb(it87_gpio_blink_pin_map_reg[i]);
+		if ((val & IT87_GPIO_BLINK_LOCATION) == loc)
+			superio_outb(val & ~IT87_GPIO_BLINK_LOCATION,
+				     it87_gpio_blink_pin_map_reg[i]);
+	}
+}
+
 static int it87_gpio_request(struct gpio_chip *chip, unsigned gpio_num)
 {
 	u8 mask, group;
@@ -154,17 +239,22 @@ static int it87_gpio_request(struct gpio_chip *chip, unsigned gpio_num)
 	mask = 1 << (gpio_num % 8);
 	group = (gpio_num / 8);
 
-	spin_lock(&it87_gpio->lock);
+	mutex_lock(&it87_gpio->lock);
 
 	rc = superio_enter();
 	if (rc)
 		goto exit;
+
+	/* BW: the it87 hwmon driver may have selected another LDN */
+	superio_select(GPIO);
 
 	/* not all the IT87xx chips support Simple I/O and not all of
 	 * them allow all the lines to be set/unset to Simple I/O.
 	 */
 	if (group < it87_gpio->simple_size)
 		superio_set_mask(mask, group + it87_gpio->simple_base);
+
+	it87_gpio_blink_unmap(it87_gpio, gpio_num);
 
 	/* clear output enable, setting the pin to input, as all the
 	 * newly-exported GPIO interfaces are set to input.
@@ -174,7 +264,7 @@ static int it87_gpio_request(struct gpio_chip *chip, unsigned gpio_num)
 	superio_exit();
 
 exit:
-	spin_unlock(&it87_gpio->lock);
+	mutex_unlock(&it87_gpio->lock);
 	return rc;
 }
 
@@ -199,11 +289,13 @@ static int it87_gpio_direction_in(struct gpio_chip *chip, unsigned gpio_num)
 	mask = 1 << (gpio_num % 8);
 	group = (gpio_num / 8);
 
-	spin_lock(&it87_gpio->lock);
+	mutex_lock(&it87_gpio->lock);
 
 	rc = superio_enter();
 	if (rc)
 		goto exit;
+
+	superio_select(GPIO);
 
 	/* clear the output enable bit */
 	superio_clear_mask(mask, group + it87_gpio->output_base);
@@ -211,8 +303,28 @@ static int it87_gpio_direction_in(struct gpio_chip *chip, unsigned gpio_num)
 	superio_exit();
 
 exit:
-	spin_unlock(&it87_gpio->lock);
+	mutex_unlock(&it87_gpio->lock);
 	return rc;
+}
+
+/*
+ * BW: the lines of a group share one data register, so the read-modify-write
+ * must be done with it87_gpio->lock held.
+ */
+static void it87_gpio_set_locked(struct it87_gpio *it87_gpio,
+				 unsigned gpio_num, int val)
+{
+	u8 mask, curr_vals;
+	u16 reg;
+
+	mask = 1 << (gpio_num % 8);
+	reg = (gpio_num / 8) + it87_gpio->io_base;
+
+	curr_vals = inb(reg);
+	if (val)
+		outb(curr_vals | mask, reg);
+	else
+		outb(curr_vals & ~mask, reg);
 }
 
 // DG: from Kernel 6.17 on, the set callback must return int (0 for success)
@@ -224,18 +336,11 @@ static void it87_gpio_set(struct gpio_chip *chip,
 			  unsigned gpio_num, int val)
 #endif
 {
-	u8 mask, curr_vals;
-	u16 reg;
 	struct it87_gpio *it87_gpio = gpiochip_get_data(chip);
 
-	mask = 1 << (gpio_num % 8);
-	reg = (gpio_num / 8) + it87_gpio->io_base;
-
-	curr_vals = inb(reg);
-	if (val)
-		outb(curr_vals | mask, reg);
-	else
-		outb(curr_vals & ~mask, reg);
+	mutex_lock(&it87_gpio->lock);
+	it87_gpio_set_locked(it87_gpio, gpio_num, val);
+	mutex_unlock(&it87_gpio->lock);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
 	return 0;
@@ -252,23 +357,175 @@ static int it87_gpio_direction_out(struct gpio_chip *chip,
 	mask = 1 << (gpio_num % 8);
 	group = (gpio_num / 8);
 
-	spin_lock(&it87_gpio->lock);
+	mutex_lock(&it87_gpio->lock);
 
 	rc = superio_enter();
 	if (rc)
 		goto exit;
 
+	superio_select(GPIO);
+
 	/* set the output enable bit */
 	superio_set_mask(mask, group + it87_gpio->output_base);
 
-	it87_gpio_set(chip, gpio_num, val);
+	it87_gpio_set_locked(it87_gpio, gpio_num, val);
 
 	superio_exit();
 
 exit:
-	spin_unlock(&it87_gpio->lock);
+	mutex_unlock(&it87_gpio->lock);
 	return rc;
 }
+
+/* BW: find the hardware blink mode for the requested LED on/off times */
+static const struct it87_gpio_blink_mode *
+it87_gpio_blink_find_mode(struct it87_gpio *it87_gpio, bool active_low,
+			  unsigned long on_ms, unsigned long off_ms)
+{
+	unsigned long low_ms = active_low ? on_ms : off_ms;
+	unsigned long high_ms = active_low ? off_ms : on_ms;
+	unsigned int i;
+
+	for (i = 0; i < it87_gpio->num_blink_modes; i++) {
+		if (it87_gpio->blink_modes[i].low_ms == low_ms &&
+		    it87_gpio->blink_modes[i].high_ms == high_ms)
+			return &it87_gpio->blink_modes[i];
+	}
+	return NULL;
+}
+
+/* BW: start blinking gpio_num with one of the (at most two) blink units */
+static int it87_gpio_blink_start(struct it87_gpio *it87_gpio,
+				 unsigned gpio_num,
+				 const struct it87_gpio_blink_mode *mode)
+{
+	u8 mask = 1 << (gpio_num % 8);
+	u8 group = gpio_num / 8;
+	u8 loc = it87_gpio_blink_location(gpio_num);
+	int rc, i, unit = -1, val;
+
+	mutex_lock(&it87_gpio->lock);
+
+	rc = superio_enter();
+	if (rc)
+		goto exit;
+
+	superio_select(GPIO);
+
+	/* reuse the unit already blinking this line, else take a free one */
+	for (i = 0; i < IT87_GPIO_BLINK_UNITS; i++) {
+		val = superio_inb(it87_gpio_blink_pin_map_reg[i]) &
+		      IT87_GPIO_BLINK_LOCATION;
+		if (val == loc) {
+			unit = i;
+			break;
+		}
+		if (val == 0 && unit < 0)
+			unit = i;
+	}
+	if (unit < 0) {
+		rc = -EBUSY;
+		goto exit_superio;
+	}
+
+	val = superio_inb(it87_gpio_blink_ctrl_reg[unit]);
+	superio_outb((val & IT87_GPIO_BLINK_CTRL_KEEP) | mode->ctrl,
+		     it87_gpio_blink_ctrl_reg[unit]);
+
+	val = superio_inb(it87_gpio_blink_pin_map_reg[unit]);
+	superio_outb((val & ~IT87_GPIO_BLINK_LOCATION) | loc,
+		     it87_gpio_blink_pin_map_reg[unit]);
+
+	/* the blink unit only drives pins in "alternate function" mode */
+	superio_clear_mask(mask, group + it87_gpio->simple_base);
+
+exit_superio:
+	superio_exit();
+exit:
+	mutex_unlock(&it87_gpio->lock);
+	return rc;
+}
+
+/* BW: stop hardware blinking of gpio_num, if it is blinking */
+static int it87_gpio_blink_stop(struct it87_gpio *it87_gpio,
+				unsigned gpio_num)
+{
+	u8 mask = 1 << (gpio_num % 8);
+	u8 group = gpio_num / 8;
+	int rc;
+
+	mutex_lock(&it87_gpio->lock);
+
+	rc = superio_enter();
+	if (rc)
+		goto exit;
+
+	superio_select(GPIO);
+	superio_set_mask(mask, group + it87_gpio->simple_base);
+	it87_gpio_blink_unmap(it87_gpio, gpio_num);
+	superio_exit();
+
+exit:
+	mutex_unlock(&it87_gpio->lock);
+	return rc;
+}
+
+/**
+ * it87_gpio_led_blink_set() - gpio_blink_set callback for leds-gpio
+ * @desc: GPIO of the LED
+ * @state: GPIO_LED_BLINK, GPIO_LED_NO_BLINK_LOW or GPIO_LED_NO_BLINK_HIGH
+ * @delay_on: requested LED on time in ms, updated if 0
+ * @delay_off: requested LED off time in ms, updated if 0
+ *
+ * BW: Uses the chip's GP LED blink units when the requested times match a
+ * hardware mode. Otherwise returns an error, so the LED core falls back to
+ * software blinking. Handles GPIOs of other chips too, so it can be set for
+ * all LEDs of a leds-gpio device.
+ */
+int it87_gpio_led_blink_set(struct gpio_desc *desc, int state,
+			    unsigned long *delay_on, unsigned long *delay_off)
+{
+	struct it87_gpio *it87_gpio = &it87_gpio_chip;
+	const struct it87_gpio_blink_mode *mode;
+	bool ours = gpiod_to_chip(desc) == &it87_gpio->chip;
+	unsigned gpio_num = 0;
+	int rc;
+
+	if (ours)
+		gpio_num = desc_to_gpio(desc) - it87_gpio->chip.base;
+
+	if (state != GPIO_LED_BLINK) {
+		if (ours && it87_gpio->blink_modes &&
+		    gpio_num / 8 < it87_gpio->simple_size) {
+			rc = it87_gpio_blink_stop(it87_gpio, gpio_num);
+			if (rc)
+				return rc;
+		}
+		if (gpiod_cansleep(desc))
+			gpiod_set_value_cansleep(desc, state);
+		else
+			gpiod_set_value(desc, state);
+		return 0;
+	}
+
+	/* only lines with a Simple I/O switch can be given to a blink unit */
+	if (!ours || !it87_gpio->blink_modes ||
+	    gpio_num / 8 >= it87_gpio->simple_size)
+		return -EOPNOTSUPP;
+
+	if (*delay_on == 0 && *delay_off == 0) {
+		*delay_on = 500;
+		*delay_off = 500;
+	}
+
+	mode = it87_gpio_blink_find_mode(it87_gpio, gpiod_is_active_low(desc),
+					 *delay_on, *delay_off);
+	if (!mode)
+		return -EINVAL;
+
+	return it87_gpio_blink_start(it87_gpio, gpio_num, mode);
+}
+EXPORT_SYMBOL_GPL(it87_gpio_led_blink_set);
 
 static const struct gpio_chip it87_template_chip = {
 	.label			= KBUILD_MODNAME,
@@ -278,7 +535,9 @@ static const struct gpio_chip it87_template_chip = {
 	.direction_input	= it87_gpio_direction_in,
 	.set			= it87_gpio_set,
 	.direction_output	= it87_gpio_direction_out,
-	.base			= -1
+	.base			= -1,
+	/* BW: all callbacks take it87_gpio->lock, which is a mutex */
+	.can_sleep		= true,
 };
 
 static int __init it87_gpio_init(void)
@@ -309,8 +568,22 @@ static int __init it87_gpio_init(void)
 		it87_gpio->simple_size = 6;
 		it87_gpio->chip.ngpio = 64;  /* has 48, use 64 for convenient calc */
 		break;
+	case IT8625_ID: /* DG: added for IT8625E support */
+		gpio_ba_reg = 0x62;
+		it87_gpio->io_size = 11;
+		it87_gpio->output_base = 0xc8;
+		/*
+		 * BW: groups 1-5 have Simple I/O switches, like IT8728F.
+		 * Verified on AS6704T: 0xc0-0xc4 hold the firmware setup
+		 * and 0xc5-0xc7 read 0 while groups 6-8 work as GPIOs.
+		 */
+		it87_gpio->simple_base = 0xc0;
+		it87_gpio->simple_size = 5;
+		it87_gpio->chip.ngpio = 64;
+		it87_gpio->blink_modes = it8625_blink_modes;
+		it87_gpio->num_blink_modes = ARRAY_SIZE(it8625_blink_modes);
+		break;
 	case IT8620_ID:
-	case IT8625_ID: /* DG: only real change compared to upstream */
 	case IT8628_ID:
 		gpio_ba_reg = 0x62;
 		it87_gpio->io_size = 11;

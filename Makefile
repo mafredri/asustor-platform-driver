@@ -42,7 +42,7 @@ dkms:
 	@echo "obj-ko := asustor.ko" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
 	@echo "asustor-y := asustor_main.o asustor_gpl2.o" >>$(DKMS_ROOT_PATH_ASUSTOR)/Makefile
 	@cp dkms.conf $(DKMS_ROOT_PATH_ASUSTOR)
-	@cp asustor_main.c asustor_gpl2.c $(DKMS_ROOT_PATH_ASUSTOR)
+	@cp asustor_main.c asustor_gpl2.c asustor_gpio_it87.h $(DKMS_ROOT_PATH_ASUSTOR)
 	@sed -i -e '/^PACKAGE_VERSION=/ s/=.*/=\"$(DRIVER_VERSION)\"/' $(DKMS_ROOT_PATH_ASUSTOR)/dkms.conf
 
 	@mkdir -p $(DKMS_ROOT_PATH_ASUSTOR_IT87)
@@ -56,7 +56,7 @@ dkms:
 	@echo "obj-m := asustor_gpio_it87.o" >>$(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/Makefile
 	@echo "obj-ko := asustor_gpio_it87.ko" >>$(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/Makefile
 	@cp dkms_gpio_it87.conf $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/dkms.conf
-	@cp asustor_gpio_it87.c $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)
+	@cp asustor_gpio_it87.c asustor_gpio_it87.h $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)
 	@sed -i -e '/^PACKAGE_VERSION=/ s/=.*/=\"$(DRIVER_VERSION)\"/' $(DKMS_ROOT_PATH_ASUSTOR_GPIO_IT87)/dkms.conf
 
 	@dkms add -m asustor -v $(DRIVER_VERSION)

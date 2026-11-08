@@ -21,6 +21,8 @@
 #include <linux/platform_device.h>
 #include <linux/version.h>
 
+#include "asustor_gpio_it87.h"
+
 #define GPIO_IT87 "asustor_gpio_it87"
 #define GPIO_ICH "gpio_ich"
 #define GPIO_AS6100 "INT33FF:01"
@@ -88,7 +90,8 @@ static struct gpio_led asustor_leds[] = {
 	{ .name = "red:side_outer", .default_state = LEDS_GPIO_DEFSTATE_ON }, // 25
 };
 
-static const struct gpio_led_platform_data asustor_leds_pdata = {
+// not const: .gpio_blink_set is set in asustor_init()
+static struct gpio_led_platform_data asustor_leds_pdata = {
 	.leds     = asustor_leds,
 	.num_leds = ARRAY_SIZE(asustor_leds),
 };
@@ -710,6 +713,14 @@ static int __init asustor_init(void)
 		}
 	}
 
+	// Hardware blinking (e.g. with the "timer" trigger) for LEDs on the IT87
+	// GPIO chip, see asustor_gpio_it87.h. Looked up with symbol_get() instead
+	// of linking against it, so asustor.ko still builds and loads without
+	// asustor_gpio_it87.ko (e.g. with DKMS); LEDs then blink in software.
+	asustor_leds_pdata.gpio_blink_set = symbol_get(it87_gpio_led_blink_set);
+	if (!asustor_leds_pdata.gpio_blink_set)
+		pr_info("asustor_gpio_it87 not loaded, no hardware LED blinking\n");
+
 	// TODO(mafredri): Handle number of disk slots -> enabled LEDs.
 	asustor_leds_pdev = asustor_create_pdev(
 		"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
@@ -730,6 +741,8 @@ static int __init asustor_init(void)
 	return 0;
 
 err:
+	if (asustor_leds_pdata.gpio_blink_set)
+		symbol_put(it87_gpio_led_blink_set);
 	gpiod_remove_lookup_table(driver_data->leds);
 	gpiod_remove_lookup_table(driver_data->keys);
 	return ret;
@@ -740,6 +753,8 @@ static void __exit asustor_cleanup(void)
 	platform_device_unregister(asustor_leds_pdev);
 	platform_device_unregister(asustor_keys_pdev);
 
+	if (asustor_leds_pdata.gpio_blink_set)
+		symbol_put(it87_gpio_led_blink_set);
 	gpiod_remove_lookup_table(driver_data->leds);
 	gpiod_remove_lookup_table(driver_data->keys);
 }

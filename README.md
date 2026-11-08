@@ -18,9 +18,9 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX, FS67XX)
   - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
     and supports more variants of IT86XX and the IT87XX chips than the kernels `it87` driver.
-    Support for timer-based blinking of up to two LEDs (only works on some models) has also been added.
-  - Also includes a patched version of `gpio-it87` called `asustor-gpio-it87`. The only change is supporting
-    the IT8625E chip that is used in several newer ASUSTOR devices.
+  - Also includes a patched version of `gpio-it87` called `asustor-gpio-it87`, which supports
+    the IT8625E chip that is used in several newer ASUSTOR devices, including
+    [hardware blinking](#hardware-led-blinking) of up to two LEDs.
   - May require adding `acpi_enforce_resources=lax` to kernel boot arguments for full functionality
   - Temperature monitoring (`lm-sensors`)
   - Fan speed regulation via `pwm1`
@@ -112,57 +112,38 @@ Include the platform drivers in your `flake.nix` as follows:
 
 ## Tips
 
-### Control blinking LEDs with `it87`
+### Hardware LED blinking
 
-*Note:* This is probably not supported on all devices, only ones that use the IT8625E or IT8720F
-chips or similar.
+The firmware leaves the green status LED blinking (in hardware) after boot. `asustor-gpio-it87`
+stops that when the LEDs are set up, so the status LED is simply on once the driver is loaded.
 
-Switch off that annoying blinking of the green status LED:
+On devices with the IT8625E chip, `asustor-gpio-it87` can also let the chip itself blink LEDs,
+using the kernel's `timer` LED trigger (see also [below](#set-triggers-for-leds)):
 ```
-echo 0 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink
+sudo modprobe ledtrig-timer
+echo timer | sudo tee /sys/class/leds/green\:status/trigger
 ```
-
-You can re-enable it with `echo 47 | sudo tee ...` because the status led is it87_gp**47**.
-You can also make other GPIO LEDs blink by using their GP number instead of 47.
-Note that this could even be done for two LEDs, as `gpled2_blink` also exists.
-
-If you want the green status LED to be constantly on (without blinking),
-the following should work, if `gpled1_blink` is still `47`:
+By default this blinks 500ms on, 500ms off. Other times (in milliseconds) can be set with
+`delay_on` and `delay_off`, for example 3s on, 1s off:
 ```
-echo 11 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
+echo 3000 | sudo tee /sys/class/leds/green\:status/delay_on
+echo 1000 | sudo tee /sys/class/leds/green\:status/delay_off
 ```
 
-Or, if you set `gpled1_blink` to `0` (or to another LED), you can switch on the status LED with:
-```
-echo 1 | sudo tee /sys/class/leds/green\:status/brightness
-```
+The chip supports the following on/off times, which are from ASUSTOR's GPL source:
+* **125** / **125**, **250** / **250**, **500** / **500**, **1000** / **1000**, **2000** / **2000**, **4000** / **4000**
+* **1000** / **3000** and **3000** / **1000**
+* **2000** / **6000** and **6000** / **2000**
+* **2000** / **500** for LEDs that are lit when their GPIO is low (like `green:status`),
+  or **500** / **2000** for LEDs that are lit when their GPIO is high (like `sata1:green:disk`)
 
-You can also configure the blinking frequency to one of 11 supported modes,
-for example, set mode 3 with:
-```
-echo 3 | sudo tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
-```
-The following blinking frequency modes exist on the IT8625:
-* **0** - 0.125s Off 0.125s On
-* **1** - 0.5s Off 0.5s On
-* **2** - 2s	Off	2s On
-* **3** - 0.25s Off 0.25s On
-* **4** - 1s Off 3s On
-* **5** - 3s Off 1s On
-* **6** - 2s Off	6s On
-* **7** - 6s Off	2s On
-* **8** - 0.5s Off 2s On
-* **9** - 1s Off 1s On
-* **10** - 4s Off 4s On
-* **11** - Always On
+Only LEDs on GPIO pins `it87_gp10` to `it87_gp57` can blink in hardware (see
+`sudo cat /sys/kernel/debug/gpio` for which pin an LED uses), and at most two at a time.
+Otherwise, or with other times, the kernel blinks the LED in software instead, which works just
+as well but needs the CPU.
 
-Other chips also support blinking control, but might support fewer modes.
-If blink frequency setting is supported at all, mode 11 (always on) *should* always work,
-and setting the other modes won't break anything, but might have differing frequencies than
-described above (and setting modes 8-10 will automatically set mode 0 instead).
-
-*Mode 11 for "always on" should always work, at least the bit set there was listed in
-all datasheets I checked (unfortunately, its function was never described in detail).*
+*Note:* Older versions of this project had `gpled1_blink` and `gpled1_blink_freq` (and `gpled2_*`)
+in `/sys/devices/platform/asustor_it87.*/hwmon/hwmon*/` for this, those have been removed.
 
 ### Set triggers for LEDs
 
