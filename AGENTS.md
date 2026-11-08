@@ -71,6 +71,10 @@ In the PR, say which parts you wrote, what you built, and whether any of it ran 
 - Say what you could not build, reproduce, or test.
 - If the bug could be a security vulnerability, do not describe it in an issue, PR, commit, or any other public place. Tell the person you work for; the maintainer takes reports through the repository's private vulnerability reporting.
 
+## Releases
+
+Versions follow [semver](https://semver.org/), and the release tag `vX.Y.Z` is the only place the version is set. `scripts/version.sh` derives the version from it for `make dkms`, in a git clone and in source archives. To release, push the tag on a commit on `main`. Only tags of exactly the form `vX.Y.Z` count, one per commit. `.github/workflows/release.yml` checks that the commit is on `main`, builds it, then publishes a GitHub release with a source tarball and notes listing the merged pull requests. Push tags only when asked to.
+
 ## Commits
 
 - Subject: `<prefix>: <imperative summary>`, at most 75 characters. Prefixes: `asustor`, `asustor-it87`, `asustor-gpio-it87`, `build` (Makefile, Kbuild), `clang-format`, `dkms`, `ci`, `docs`, `nix`.
