@@ -1,0 +1,46 @@
+name: Hardware support
+description: Add support for a model, or fix LEDs, buttons or detection on one
+labels: ["enhancement"]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: As printed on the device or its box, for example AS6704T.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What works and what does not
+      description: >-
+        Does `asustor` load, and which model does it report in `dmesg`
+        ("Found ... or similar")? Which LEDs or buttons are missing or wrong?
+        Did you try `force_device`, and with which value?
+    validations:
+      required: true
+  - type: textarea
+    id: panel
+    attributes:
+      label: Front panel
+      description: >-
+        Which LEDs and buttons the device physically has, for example
+        "power, status, LAN, USB, 4 disk bays with two-colour LEDs, USB copy button",
+        and which bays or slots had a drive in them when you ran the script.
+    validations:
+      required: true
+  - type: textarea
+    id: info
+    attributes:
+      label: Hardware information
+      description: >-
+        From a clone of this repository, build and load the modules if they
+        load (`make`, then `sudo insmod asustor_gpio_it87.ko`,
+        `sudo insmod asustor_it87.ko`, `sudo insmod asustor.ko`), then run
+        `sudo scripts/collect-info.sh >asustor-info.md` and attach
+        `asustor-info.md` here (drag the file into this box). The script only
+        reads and leaves out serial numbers, UUIDs, MAC addresses and the
+        kernel command line; look through the file before attaching it. It
+        is too long to paste.
+    validations:
+      required: true
