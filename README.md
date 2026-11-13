@@ -15,7 +15,7 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 
 ### Optional
 
-- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS54XX, FS67XX)
+- `it87` (AS6, AS61, AS62, AS66XX, AS67XX, AS53xx, AS54XX, FS67XX)
   - This project includes a patched version of `it87` called `asustor-it87` which skips fan pwm sanity checks
     and supports more variants of IT86XX and the IT87XX chips than the kernels `it87` driver.
     Support for timer-based blinking of up to two LEDs (only works on some models) has also been added.
@@ -33,8 +33,10 @@ On many systems, ASUSTOR uses a mix of IT87 and CPU GPIOs to control leds and bu
 - AS604T
 - AS6104T (NOT TESTED!)
 - AS6204T
+- AS6302T
 - AS6602T, AS6604T (NOT TESTED!)
 - AS6702T, AS6704T, AS6706T
+- AS5304T
 - AS5402T, AS5404T (NOT TESTED!)
 - FS6706T, FS6712X
 - .. possibly more, if they're similar enough.
@@ -46,9 +48,13 @@ The following DMI system-manufacturer / system-product-name combinations are cur
 * "Insyde" / "AS61xx"
     - Identified by `asustor` kernel module as **"AS61xx"**
 * "Insyde" / "GeminiLake"
-    - These are the *Lockerstor* AS66xxT devices, like AS6604T
+    - These are the *Lockerstor* AS66xxT devices, like AS6604T or *Nimbustor* AS53xxT (AS5304T) devices.
         - *maybe also others like Nimbustor AS520xT?*
-    - Identified by `asustor` kernel module as **"AS66xx"**
+    - Identified by `asustor` kernel module as:
+      - **"AS66xx"** for *Lockerstor* (AS6602T and AS6604T)
+      - **"AS53xx"** for *Nimbustor* (AS5304T)
+* "Intel Corporation" / "Apollolake I Platform"
+    - Identified by `asustor` kernel module as **"AS63xx"** (AS6302T known to work)
 * "Intel Corporation" / "Jasper Lake Client Platform"
     - These are the *Lockerstor Gen2* AS67xxT (AS6702T etc), *Nimbustor Gen2* AS54xxT (AS5402T etc)
       and *Flashstor* FS6706T/FS6712X devices.
