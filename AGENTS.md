@@ -54,7 +54,7 @@ make KERNEL_BUILD=/path/to/kernel/build   # against another headers tree
 make clean                                # pass the same KERNEL_BUILD= as the build
 ```
 
-Without the hardware, verification means building. CI (`.github/workflows/build.yaml`) builds every pull request with `-Werror` against distribution kernel headers and against kernel.org trees (mainline, stable, and longterm releases from 6.1). To reproduce a kernel.org build locally:
+Without the hardware, verification means building. CI (`.github/workflows/build.yaml`) builds every pull request that changes more than documentation with `-Werror` against distribution kernel headers and against kernel.org trees (mainline, stable, and longterm releases from 6.1). To reproduce a kernel.org build locally:
 
 ```sh
 .github/scripts/prepare-kernel.sh /path/to/linux-x.y
