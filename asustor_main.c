@@ -8,6 +8,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/blkdev.h>
 #include <linux/dmi.h>
 #include <linux/errno.h>
 #include <linux/gpio/driver.h>
@@ -16,10 +17,16 @@
 #include <linux/input.h>
 #include <linux/kernel.h>
 #include <linux/leds.h>
+#include <linux/libata.h>
 #include <linux/module.h>
+#include <linux/part_stat.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 #include <linux/version.h>
+#include <linux/workqueue.h>
+#include <scsi/scsi_device.h>
+#include <scsi/scsi_host.h>
 
 #define GPIO_IT87 "asustor_gpio_it87"
 #define GPIO_ICH "gpio_ich"
@@ -302,6 +309,25 @@ enum {
 	DEVICE_COUNT_MAX = 0x7fff // INT16_MAX - used for "no upper limit"
 };
 
+#define ASUSTOR_MAX_DISK_BAYS 6
+
+// The SATA ports of the drive bays, used by the "asustor-sataN" LED triggers:
+// they blink the sataN:green:disk LED only for activity of the disk in that
+// bay (the "disk-activity" trigger blinks all of them for activity of any disk).
+// ata_port[i] is the ATA port of the bay whose LED is "sata<i+1>", numbered
+// like /sys/class/ata_port/ataX/port_no of the ports on that SATA controller
+// (which is also the N in /dev/disk/by-path/pci-...-ata-N).
+// To find them, read from one disk (e.g. with dd) and see which bay's LED
+// blinks, then look up the disk in `ls -l /dev/disk/by-path/`.
+struct asustor_disk_bays {
+	// PCI vendor and device ID of the SATA controller
+	uint16_t vendorID;
+	uint16_t deviceID;
+
+	uint8_t num_bays;
+	uint8_t ata_port[ASUSTOR_MAX_DISK_BAYS];
+};
+
 // ASUSTOR Platform.
 struct asustor_driver_data {
 	const char *name; // used for force_device and for some log messages
@@ -310,6 +336,10 @@ struct asustor_driver_data {
 
 	struct gpiod_lookup_table *leds;
 	struct gpiod_lookup_table *keys;
+
+	// NULL if not known for this device, then all sataN:green:disk LEDs
+	// use the "disk-activity" trigger
+	const struct asustor_disk_bays *disk_bays;
 };
 
 #define VALID_OVERRIDE_NAMES                                                   \
@@ -347,6 +377,15 @@ static struct asustor_driver_data asustor_as6702_driver_data = {
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
+static const struct asustor_disk_bays asustor_as6704_disk_bays = {
+	// SATA controller: ASMedia Technology Inc. ASM1164 Serial ATA AHCI Controller [1b21:1164]
+	// bays sata1-sata4 (left to right) are ATA ports 1-4 (verified on AS6704T)
+	.vendorID = 0x1b21,
+	.deviceID = 0x1164,
+	.num_bays = 4,
+	.ata_port = { 1, 2, 3, 4 },
+};
+
 static struct asustor_driver_data asustor_as6704_driver_data = {
 	.name = "AS6704",
 	.pci_matches = {
@@ -355,8 +394,9 @@ static struct asustor_driver_data asustor_as6704_driver_data = {
 		// not by any of the other AS67xx or FS67xx devices
 		{ 0x1b21, 0x1164, 1, 1 }
 	},
-	.leds = &asustor_as6704_gpio_leds_lookup,
-	.keys = &asustor_6100_gpio_keys_lookup,
+	.leds      = &asustor_as6704_gpio_leds_lookup,
+	.keys      = &asustor_6100_gpio_keys_lookup,
+	.disk_bays = &asustor_as6704_disk_bays,
 };
 
 static struct asustor_driver_data asustor_as6706_driver_data = {
@@ -515,6 +555,210 @@ MODULE_DEVICE_TABLE(dmi, asustor_systems);
 static struct asustor_driver_data *driver_data;
 static struct platform_device *asustor_leds_pdev;
 static struct platform_device *asustor_keys_pdev;
+
+// "asustor-sataN" LED triggers, see struct asustor_disk_bays
+
+// Writable at runtime: the poll work picks up a change within two polls.
+static bool disk_led_ready = true;
+module_param(disk_led_ready, bool, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+MODULE_PARM_DESC(
+	disk_led_ready,
+	"Keep the disk LED of a bay on while a disk is in it and blink it off on "
+	"activity, like ASUSTOR's firmware (default). If false, the LED is off "
+	"and blinks on activity. Can be changed at runtime. Only for devices with "
+	"known disk bays.");
+
+#define ASUSTOR_DISK_BAYS_POLL_MS 100
+#define ASUSTOR_DISK_BAYS_BLINK_MS 50
+
+struct asustor_disk_bay {
+	struct led_trigger trigger;
+	char name[16]; // "asustor-sataN"
+	bool present;
+	unsigned long ios; // completed I/Os of the disk at the last poll
+};
+
+static struct asustor_disk_bay *asustor_disk_bays;
+static struct pci_dev *asustor_disk_bays_pdev;
+static struct delayed_work asustor_disk_bays_work;
+// disk_led_ready as last seen by the poll work, only used by the poll work
+static bool asustor_disk_bays_ready;
+// set by the poll work when disk_led_ready changed, see there
+static bool asustor_disk_bays_reapply;
+
+static enum led_brightness
+asustor_disk_bay_brightness(const struct asustor_disk_bay *bay, bool ready)
+{
+	return ready && READ_ONCE(bay->present) ? LED_FULL : LED_OFF;
+}
+
+static void asustor_disk_bay_blink(struct asustor_disk_bay *bay, bool ready)
+{
+	unsigned long delay_on  = ASUSTOR_DISK_BAYS_BLINK_MS;
+	unsigned long delay_off = ASUSTOR_DISK_BAYS_BLINK_MS;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+	led_trigger_blink_oneshot(&bay->trigger, delay_on, delay_off, ready);
+#else
+	// before 6.5 the delays were passed as pointers
+	led_trigger_blink_oneshot(&bay->trigger, &delay_on, &delay_off, ready);
+#endif
+}
+
+static int asustor_disk_bay_activate(struct led_classdev *led_cdev)
+{
+	struct asustor_disk_bay *bay = container_of(
+		led_cdev->trigger, struct asustor_disk_bay, trigger);
+	bool ready = READ_ONCE(disk_led_ready);
+
+	led_set_brightness(led_cdev, asustor_disk_bay_brightness(bay, ready));
+	return 0;
+}
+
+struct asustor_disk_lookup {
+	unsigned int ata_port;
+	bool found;
+	unsigned long ios;
+};
+
+// looks for the disk on lookup->ata_port below dev, called for the devices
+// below the SATA controller
+static int asustor_disk_lookup_dev(struct device *dev, void *data)
+{
+	struct asustor_disk_lookup *lookup = data;
+	struct scsi_device *sdev;
+	struct ata_port *ap;
+
+	// the disk (gendisk) is a child of the SCSI device of its ATA port
+	if (!dev->type || !dev->type->name || strcmp(dev->type->name, "disk") ||
+	    !dev->parent || !scsi_is_sdev_device(dev->parent))
+		return device_for_each_child(dev, data,
+		                             asustor_disk_lookup_dev);
+
+	// all SCSI hosts below the SATA controller are libata ports
+	sdev = to_scsi_device(dev->parent);
+	ap   = ata_shost_to_port(sdev->host);
+	// ATA port numbers in sysfs start at 1, ap->port_no starts at 0
+	if (ap->port_no + 1 != lookup->ata_port)
+		return 0;
+
+	lookup->found = true;
+	lookup->ios   = part_stat_read_accum(dev_to_disk(dev)->part0, ios);
+	return 1;
+}
+
+// Polls the I/O counters instead of hooking into libata, which has no
+// per-port LED trigger. Looking the disks up each time handles hot plugging.
+static void asustor_disk_bays_poll(struct work_struct *work)
+{
+	const struct asustor_disk_bays *bays = driver_data->disk_bays;
+	bool ready, changed;
+	int i;
+
+	ready   = READ_ONCE(disk_led_ready);
+	changed = ready != asustor_disk_bays_ready;
+
+	for (i = 0; i < bays->num_bays; i++) {
+		struct asustor_disk_bay *bay      = &asustor_disk_bays[i];
+		struct asustor_disk_lookup lookup = {
+			.ata_port = bays->ata_port[i],
+		};
+
+		device_for_each_child(&asustor_disk_bays_pdev->dev, &lookup,
+		                      asustor_disk_lookup_dev);
+
+		if (changed) {
+			// disk_led_ready was changed: a running blink would
+			// end in the idle state of the old setting, so stop it
+			// (setting LED_OFF does) and set the new idle state in
+			// the next poll, once the blink is stopped
+			WRITE_ONCE(bay->present, lookup.found);
+			led_trigger_event(&bay->trigger, LED_OFF);
+		} else if (lookup.found != bay->present ||
+		           asustor_disk_bays_reapply) {
+			WRITE_ONCE(bay->present, lookup.found);
+			led_trigger_event(&bay->trigger,
+			                  asustor_disk_bay_brightness(bay,
+			                                              ready));
+		} else if (lookup.found && lookup.ios != bay->ios) {
+			// with disk_led_ready the LED is on, so blink it off
+			asustor_disk_bay_blink(bay, ready);
+		}
+		bay->ios = lookup.ios;
+	}
+	asustor_disk_bays_ready   = ready;
+	asustor_disk_bays_reapply = changed;
+
+	schedule_delayed_work(&asustor_disk_bays_work,
+	                      msecs_to_jiffies(ASUSTOR_DISK_BAYS_POLL_MS));
+}
+
+static int __init asustor_disk_bays_init(void)
+{
+	const struct asustor_disk_bays *bays = driver_data->disk_bays;
+	int i, ret;
+
+	if (!bays)
+		return 0;
+
+	asustor_disk_bays_pdev =
+		pci_get_device(bays->vendorID, bays->deviceID, NULL);
+	if (!asustor_disk_bays_pdev) {
+		pr_warn("SATA controller %04x:%04x not found, using disk-activity for disk LEDs\n",
+		        bays->vendorID, bays->deviceID);
+		driver_data->disk_bays = NULL;
+		return 0;
+	}
+
+	asustor_disk_bays =
+		kcalloc(bays->num_bays, sizeof(*asustor_disk_bays), GFP_KERNEL);
+	if (!asustor_disk_bays) {
+		ret = -ENOMEM;
+		goto err_put;
+	}
+
+	for (i = 0; i < bays->num_bays; i++) {
+		struct asustor_disk_bay *bay = &asustor_disk_bays[i];
+
+		snprintf(bay->name, sizeof(bay->name), "asustor-sata%d", i + 1);
+		bay->trigger.name     = bay->name;
+		bay->trigger.activate = asustor_disk_bay_activate;
+
+		ret = led_trigger_register(&bay->trigger);
+		if (ret) {
+			pr_err("failed registering LED trigger %s: %d\n",
+			       bay->name, ret);
+			goto err_unregister;
+		}
+	}
+
+	asustor_disk_bays_ready = READ_ONCE(disk_led_ready);
+	INIT_DELAYED_WORK(&asustor_disk_bays_work, asustor_disk_bays_poll);
+	schedule_delayed_work(&asustor_disk_bays_work, 0);
+	return 0;
+
+err_unregister:
+	while (--i >= 0)
+		led_trigger_unregister(&asustor_disk_bays[i].trigger);
+	kfree(asustor_disk_bays);
+err_put:
+	pci_dev_put(asustor_disk_bays_pdev);
+	return ret;
+}
+
+static void asustor_disk_bays_exit(void)
+{
+	int i;
+
+	if (!driver_data->disk_bays)
+		return;
+
+	cancel_delayed_work_sync(&asustor_disk_bays_work);
+	for (i = 0; i < driver_data->disk_bays->num_bays; i++)
+		led_trigger_unregister(&asustor_disk_bays[i].trigger);
+	kfree(asustor_disk_bays);
+	pci_dev_put(asustor_disk_bays_pdev);
+}
 
 static struct platform_device *__init asustor_create_pdev(const char *name,
                                                           const void *pdata,
@@ -709,12 +953,31 @@ static int __init asustor_init(void)
 		}
 	}
 
+	// Register the triggers before the LEDs, so the disk LEDs get them right away.
+	ret = asustor_disk_bays_init();
+	if (ret)
+		goto err;
+	if (driver_data->disk_bays) {
+		for (i = 0; i < driver_data->disk_bays->num_bays; i++) {
+			char name[24];
+			int j;
+
+			snprintf(name, sizeof(name), "sata%d:green:disk",
+			         i + 1);
+			for (j = 0; j < ARRAY_SIZE(asustor_leds); j++) {
+				if (!strcmp(asustor_leds[j].name, name))
+					asustor_leds[j].default_trigger =
+						asustor_disk_bays[i].name;
+			}
+		}
+	}
+
 	// TODO(mafredri): Handle number of disk slots -> enabled LEDs.
 	asustor_leds_pdev = asustor_create_pdev(
 		"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
 	if (IS_ERR(asustor_leds_pdev)) {
 		ret = PTR_ERR(asustor_leds_pdev);
-		goto err;
+		goto err_disk_bays;
 	}
 
 	asustor_keys_pdev =
@@ -723,11 +986,13 @@ static int __init asustor_init(void)
 	if (IS_ERR(asustor_keys_pdev)) {
 		ret = PTR_ERR(asustor_keys_pdev);
 		platform_device_unregister(asustor_leds_pdev);
-		goto err;
+		goto err_disk_bays;
 	}
 
 	return 0;
 
+err_disk_bays:
+	asustor_disk_bays_exit();
 err:
 	gpiod_remove_lookup_table(driver_data->leds);
 	gpiod_remove_lookup_table(driver_data->keys);
@@ -738,6 +1003,7 @@ static void __exit asustor_cleanup(void)
 {
 	platform_device_unregister(asustor_leds_pdev);
 	platform_device_unregister(asustor_keys_pdev);
+	asustor_disk_bays_exit();
 
 	gpiod_remove_lookup_table(driver_data->leds);
 	gpiod_remove_lookup_table(driver_data->keys);
