@@ -17,8 +17,11 @@
 #include <linux/kernel.h>
 #include <linux/leds.h>
 #include <linux/module.h>
+#include <linux/notifier.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
+#include <linux/usb.h>
+#include <linux/usb/hcd.h>
 #include <linux/version.h>
 
 #define GPIO_IT87 "asustor_gpio_it87"
@@ -302,6 +305,26 @@ enum {
 	DEVICE_COUNT_MAX = 0x7fff // INT16_MAX - used for "no upper limit"
 };
 
+// The USB port next to the USB LED (usually the front USB port), used by the
+// "asustor-front-usb" LED trigger to light the USB LED while a device is plugged
+// into that port.
+// A USB 3 port shows up as two root hub ports of the same USB host controller:
+// one on its USB 2 root hub and one on its USB 3 root hub.
+// To find the values for a device, plug a USB stick into the front port and
+// look at `ls /sys/bus/usb/devices/`: e.g. "2-2" is port 2 of bus 2. Then
+// `cat /sys/bus/usb/devices/usb2/speed` tells if bus 2 is the USB 3 (5000 or
+// more) or the USB 2 (480) root hub, and
+// `readlink /sys/bus/usb/devices/usb2-port2/peer` shows the other port.
+// The host controller's PCI IDs are in `lspci -nn` (the "USB controller" line).
+struct asustor_usb_led {
+	// PCI vendor and device ID of the USB host controller
+	uint16_t vendorID;
+	uint16_t deviceID;
+
+	uint8_t usb2_port; // port on the USB 2 root hub, 0 if none
+	uint8_t usb3_port; // port on the USB 3 root hub, 0 if none
+};
+
 // ASUSTOR Platform.
 struct asustor_driver_data {
 	const char *name; // used for force_device and for some log messages
@@ -310,6 +333,9 @@ struct asustor_driver_data {
 
 	struct gpiod_lookup_table *leds;
 	struct gpiod_lookup_table *keys;
+
+	// NULL if not known for this device
+	const struct asustor_usb_led *usb_led;
 };
 
 #define VALID_OVERRIDE_NAMES                                                   \
@@ -347,6 +373,15 @@ static struct asustor_driver_data asustor_as6702_driver_data = {
 	.keys = &asustor_6100_gpio_keys_lookup,
 };
 
+static const struct asustor_usb_led asustor_as6704_usb_led = {
+	// USB controller: Intel Corporation Jasper Lake USB 3.1 xHCI Host Controller [8086:4ded]
+	// the front USB port is port 2 of both root hubs (verified on AS6704T)
+	.vendorID  = 0x8086,
+	.deviceID  = 0x4ded,
+	.usb2_port = 2,
+	.usb3_port = 2,
+};
+
 static struct asustor_driver_data asustor_as6704_driver_data = {
 	.name = "AS6704",
 	.pci_matches = {
@@ -355,8 +390,9 @@ static struct asustor_driver_data asustor_as6704_driver_data = {
 		// not by any of the other AS67xx or FS67xx devices
 		{ 0x1b21, 0x1164, 1, 1 }
 	},
-	.leds = &asustor_as6704_gpio_leds_lookup,
-	.keys = &asustor_6100_gpio_keys_lookup,
+	.leds    = &asustor_as6704_gpio_leds_lookup,
+	.keys    = &asustor_6100_gpio_keys_lookup,
+	.usb_led = &asustor_as6704_usb_led,
 };
 
 static struct asustor_driver_data asustor_as6706_driver_data = {
@@ -515,6 +551,117 @@ MODULE_DEVICE_TABLE(dmi, asustor_systems);
 static struct asustor_driver_data *driver_data;
 static struct platform_device *asustor_leds_pdev;
 static struct platform_device *asustor_keys_pdev;
+
+// "asustor-front-usb" LED trigger, see struct asustor_usb_led
+static bool asustor_usb_led_state;
+
+// is udev plugged directly into the port next to the USB LED?
+static bool asustor_usb_led_port_matches(struct usb_device *udev)
+{
+	const struct asustor_usb_led *ul = driver_data->usb_led;
+	struct usb_hcd *hcd;
+	struct pci_dev *pdev;
+	uint8_t port;
+
+	// only devices directly connected to a root hub port (not root hubs,
+	// and not devices behind a hub plugged into that port)
+	if (!udev->parent || udev->parent->parent)
+		return false;
+
+	hcd = bus_to_hcd(udev->bus);
+	if (!hcd->self.controller || !dev_is_pci(hcd->self.controller))
+		return false;
+	pdev = to_pci_dev(hcd->self.controller);
+	if (pdev->vendor != ul->vendorID || pdev->device != ul->deviceID)
+		return false;
+
+	port = udev->parent->speed >= USB_SPEED_SUPER ? ul->usb3_port :
+	                                                ul->usb2_port;
+	return port != 0 && udev->portnum == port;
+}
+
+struct asustor_usb_led_count {
+	struct usb_device *ignore; // device that is being removed
+	int count;
+};
+
+static int asustor_usb_led_count_dev(struct usb_device *udev, void *data)
+{
+	struct asustor_usb_led_count *c = data;
+
+	if (udev != c->ignore && asustor_usb_led_port_matches(udev))
+		c->count++;
+	return 0;
+}
+
+static int asustor_usb_led_activate(struct led_classdev *led_cdev)
+{
+	led_set_brightness(led_cdev,
+	                   asustor_usb_led_state ? LED_FULL : LED_OFF);
+	return 0;
+}
+
+static struct led_trigger asustor_usb_led_trigger = {
+	.name     = "asustor-front-usb",
+	.activate = asustor_usb_led_activate,
+};
+
+// counts the devices instead of tracking add/remove events, so the state
+// can't get out of sync; removed is the device that is being removed, if any
+static void asustor_usb_led_update(struct usb_device *removed)
+{
+	struct asustor_usb_led_count c = { .ignore = removed };
+
+	usb_for_each_dev(&c, asustor_usb_led_count_dev);
+	asustor_usb_led_state = c.count > 0;
+	led_trigger_event(&asustor_usb_led_trigger,
+	                  asustor_usb_led_state ? LED_FULL : LED_OFF);
+}
+
+static int asustor_usb_led_notify(struct notifier_block *nb,
+                                  unsigned long action, void *data)
+{
+	struct usb_device *udev = data;
+
+	if (action != USB_DEVICE_ADD && action != USB_DEVICE_REMOVE)
+		return NOTIFY_DONE;
+	if (!asustor_usb_led_port_matches(udev))
+		return NOTIFY_DONE;
+
+	asustor_usb_led_update(action == USB_DEVICE_REMOVE ? udev : NULL);
+	return NOTIFY_OK;
+}
+
+static struct notifier_block asustor_usb_led_nb = {
+	.notifier_call = asustor_usb_led_notify,
+};
+
+static int __init asustor_usb_led_init(void)
+{
+	int ret;
+
+	if (!driver_data->usb_led)
+		return 0;
+
+	ret = led_trigger_register(&asustor_usb_led_trigger);
+	if (ret) {
+		pr_err("failed registering LED trigger %s: %d\n",
+		       asustor_usb_led_trigger.name, ret);
+		return ret;
+	}
+	usb_register_notify(&asustor_usb_led_nb);
+	asustor_usb_led_update(NULL);
+	return 0;
+}
+
+static void asustor_usb_led_exit(void)
+{
+	if (!driver_data->usb_led)
+		return;
+
+	usb_unregister_notify(&asustor_usb_led_nb);
+	led_trigger_unregister(&asustor_usb_led_trigger);
+}
 
 static struct platform_device *__init asustor_create_pdev(const char *name,
                                                           const void *pdata,
@@ -709,12 +856,25 @@ static int __init asustor_init(void)
 		}
 	}
 
+	// Register the trigger before the LEDs, so the USB LED gets it right away.
+	ret = asustor_usb_led_init();
+	if (ret)
+		goto err;
+	if (driver_data->usb_led) {
+		for (i = 0; i < ARRAY_SIZE(asustor_leds); i++) {
+			if (!strcmp(asustor_leds[i].name, "blue:usb") ||
+			    !strcmp(asustor_leds[i].name, "green:usb"))
+				asustor_leds[i].default_trigger =
+					asustor_usb_led_trigger.name;
+		}
+	}
+
 	// TODO(mafredri): Handle number of disk slots -> enabled LEDs.
 	asustor_leds_pdev = asustor_create_pdev(
 		"leds-gpio", &asustor_leds_pdata, sizeof(asustor_leds_pdata));
 	if (IS_ERR(asustor_leds_pdev)) {
 		ret = PTR_ERR(asustor_leds_pdev);
-		goto err;
+		goto err_usb_led;
 	}
 
 	asustor_keys_pdev =
@@ -723,11 +883,13 @@ static int __init asustor_init(void)
 	if (IS_ERR(asustor_keys_pdev)) {
 		ret = PTR_ERR(asustor_keys_pdev);
 		platform_device_unregister(asustor_leds_pdev);
-		goto err;
+		goto err_usb_led;
 	}
 
 	return 0;
 
+err_usb_led:
+	asustor_usb_led_exit();
 err:
 	gpiod_remove_lookup_table(driver_data->leds);
 	gpiod_remove_lookup_table(driver_data->keys);
@@ -738,6 +900,7 @@ static void __exit asustor_cleanup(void)
 {
 	platform_device_unregister(asustor_leds_pdev);
 	platform_device_unregister(asustor_keys_pdev);
+	asustor_usb_led_exit();
 
 	gpiod_remove_lookup_table(driver_data->leds);
 	gpiod_remove_lookup_table(driver_data->keys);

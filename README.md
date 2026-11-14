@@ -181,6 +181,10 @@ echo r8169-0-200:00:link > /sys/class/leds/blue\:lan
 `cat /sys/class/leds/green\:usb/trigger` will list the available triggers, with the currently used
 one being marked with square brackes (e.g. `[none]  kbd-scrolllock kbd-numlock kbd-capslock ...`).
 
+On devices where the front USB port is known (currently AS6704T, see `struct asustor_usb_led` in
+[asustor_main.c](asustor_main.c) for how to add others), the USB LED uses the `asustor-front-usb`
+trigger by default, which lights it while a USB device is plugged into the front port.
+
 Note that currently the disk-related triggers (like `disk-activity`) do **not** work with NVME drives.
 That's a general limitation of the Linux kernel that is independent of this project.
 If this feature is ever implemented in the kernel, it will automatically work with this driver.
