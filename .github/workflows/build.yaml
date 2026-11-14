@@ -1,7 +1,7 @@
 # Builds the modules against distribution kernel headers and kernel.org
 # source trees and the Nix flake, tests DKMS install and removal, and runs
-# checkpatch on pull request commits. Pull requests that change only
-# documentation skip the builds.
+# checkpatch on the changes a pull request makes. Pull requests that change
+# only documentation skip the builds.
 name: Build
 
 # Pull requests run through pull_request only; push covers merges to main.
@@ -241,7 +241,7 @@ jobs:
           done
           chmod +x "$RUNNER_TEMP/checkpatch/checkpatch.pl"
 
-      - name: Run checkpatch on each commit
+      - name: Run checkpatch on the pull request's changes
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
